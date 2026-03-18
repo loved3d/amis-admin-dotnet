@@ -42,6 +42,15 @@ public abstract class BaseAdmin
     public virtual bool HasPagePermission(HttpContext context) => true;
 
     /// <summary>
+    /// Async version of <see cref="HasPagePermission"/>.
+    /// Override for async authorization (e.g. database role lookup).
+    /// Default implementation calls the synchronous <see cref="HasPagePermission"/>.
+    /// Maps to Python <c>async has_page_permission()</c>.
+    /// </summary>
+    public virtual Task<bool> HasPagePermissionAsync(HttpContext context)
+        => Task.FromResult(HasPagePermission(context));
+
+    /// <summary>
     /// Helper that returns <c>true</c> when the requesting user is authenticated.
     /// Use this inside a <see cref="HasPagePermission"/> override to require login:
     /// <code>

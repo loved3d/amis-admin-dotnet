@@ -178,6 +178,12 @@ public static class TableModelParser
                     Label    = f.Name,
                     Required = f.IsRequired ? true : null
                 },
+                "input-date" => new InputDate
+                {
+                    Name     = f.ColumnName,
+                    Label    = f.Name,
+                    Required = f.IsRequired ? true : null
+                },
                 "input-number" => new InputNumber
                 {
                     Name     = f.ColumnName,
