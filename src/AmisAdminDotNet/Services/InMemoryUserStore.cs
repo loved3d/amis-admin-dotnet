@@ -16,26 +16,29 @@ public sealed class InMemoryUserStore : IUserStore
 
     public PagedResult<UserRecord> Query(string? keywords, int page, int perPage)
     {
-        page = Math.Max(page, 1);
-        perPage = Math.Clamp(perPage, 1, 100);
-
-        IEnumerable<UserRecord> query = _users.OrderBy(user => user.Id);
-
-        if (!string.IsNullOrWhiteSpace(keywords))
+        lock (_syncRoot)
         {
-            query = query.Where(user =>
-                user.Name.Contains(keywords, StringComparison.OrdinalIgnoreCase) ||
-                user.Email.Contains(keywords, StringComparison.OrdinalIgnoreCase) ||
-                user.Role.Contains(keywords, StringComparison.OrdinalIgnoreCase));
+            page = Math.Max(page, 1);
+            perPage = Math.Clamp(perPage, 1, 100);
+
+            IEnumerable<UserRecord> query = _users.OrderBy(user => user.Id);
+
+            if (!string.IsNullOrWhiteSpace(keywords))
+            {
+                query = query.Where(user =>
+                    user.Name.Contains(keywords, StringComparison.OrdinalIgnoreCase) ||
+                    user.Email.Contains(keywords, StringComparison.OrdinalIgnoreCase) ||
+                    user.Role.Contains(keywords, StringComparison.OrdinalIgnoreCase));
+            }
+
+            var filtered = query.ToList();
+            var items = filtered
+                .Skip((page - 1) * perPage)
+                .Take(perPage)
+                .ToList();
+
+            return new PagedResult<UserRecord>(items, filtered.Count);
         }
-
-        var filtered = query.ToList();
-        var items = filtered
-            .Skip((page - 1) * perPage)
-            .Take(perPage)
-            .ToList();
-
-        return new PagedResult<UserRecord>(items, filtered.Count);
     }
 
     public UserRecord Create(SaveUserRequest request)

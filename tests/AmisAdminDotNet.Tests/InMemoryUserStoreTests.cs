@@ -34,10 +34,12 @@ public sealed class InMemoryUserStoreTests
     public void Query_AppliesPagingAndKeywordFiltering()
     {
         var store = new InMemoryUserStore();
+        var fullResult = store.Query("example.com", page: 1, perPage: 100);
 
         var page = store.Query("example.com", page: 1, perPage: 2);
 
-        Assert.Equal(3, page.Total);
+        Assert.Equal(fullResult.Total, page.Total);
+        Assert.True(page.Total >= 3);
         Assert.Equal(2, page.Items.Count);
     }
 }

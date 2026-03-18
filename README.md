@@ -11,7 +11,7 @@
 ## 运行
 
 ```bash
-dotnet run --project /home/runner/work/amis-admin-dotnet/amis-admin-dotnet/src/AmisAdminDotNet/AmisAdminDotNet.csproj
+dotnet run --project src/AmisAdminDotNet/AmisAdminDotNet.csproj
 ```
 
 启动后访问：
