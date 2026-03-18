@@ -49,6 +49,45 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
         Db = db;
     }
 
+    // ── Declarative configuration ────────────────────────────────────────────
+
+    /// <summary>
+    /// Properties to display as table columns (by name, case-insensitive).
+    /// An empty array means "show all public properties" (current behaviour).
+    /// Maps to Python <c>ModelAdmin.list_display</c>.
+    /// </summary>
+    public virtual string[] ListDisplay { get; } = [];
+
+    /// <summary>
+    /// Properties used for keyword search when <see cref="CrudQueryParams.Search"/> is non-null.
+    /// Only <see cref="string"/> type properties are matched.
+    /// Maps to Python <c>ModelAdmin.search_fields</c>.
+    /// </summary>
+    public virtual string[] SearchFields { get; } = [];
+
+    /// <summary>
+    /// Default number of rows per page. Maps to Python <c>ModelAdmin.list_per_page</c>.
+    /// </summary>
+    public virtual int ListPerPage { get; } = 10;
+
+    /// <summary>
+    /// Default ordering column and direction, e.g. <c>"Title"</c> or <c>"-CreatedAt"</c>.
+    /// A leading <c>"-"</c> means descending. Maps to Python <c>ModelAdmin.ordering</c>.
+    /// </summary>
+    public virtual string? DefaultOrdering { get; } = null;
+
+    /// <summary>
+    /// Properties that are read-only in create/edit forms (rendered with disabled).
+    /// Maps to Python <c>ModelAdmin.readonly_fields</c>.
+    /// </summary>
+    public virtual string[] ReadonlyFields { get; } = [];
+
+    /// <summary>Whether to add export-csv to the list table footer. Maps to Python footerToolbar.</summary>
+    public virtual bool EnableExportCsv { get; } = false;
+
+    /// <summary>Whether to add export-excel to the list table footer.</summary>
+    public virtual bool EnableExportExcel { get; } = false;
+
     // ── Permission hooks ──────────────────────────────────────────────────────
 
     /// <summary>
@@ -74,6 +113,35 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
     /// Defaults to <see cref="BaseAdmin.HasPagePermission"/>.
     /// </summary>
     public virtual bool HasDeletePermission(HttpContext context) => HasPagePermission(context);
+
+    /// <summary>
+    /// Async version of <see cref="HasReadPermission"/>.
+    /// Override for async authorization (e.g. database role lookup).
+    /// Default implementation calls the synchronous <see cref="HasReadPermission"/>.
+    /// </summary>
+    public virtual Task<bool> HasReadPermissionAsync(HttpContext context)
+        => Task.FromResult(HasReadPermission(context));
+
+    /// <summary>
+    /// Async version of <see cref="HasCreatePermission"/>.
+    /// Default implementation calls the synchronous <see cref="HasCreatePermission"/>.
+    /// </summary>
+    public virtual Task<bool> HasCreatePermissionAsync(HttpContext context)
+        => Task.FromResult(HasCreatePermission(context));
+
+    /// <summary>
+    /// Async version of <see cref="HasUpdatePermission"/>.
+    /// Default implementation calls the synchronous <see cref="HasUpdatePermission"/>.
+    /// </summary>
+    public virtual Task<bool> HasUpdatePermissionAsync(HttpContext context)
+        => Task.FromResult(HasUpdatePermission(context));
+
+    /// <summary>
+    /// Async version of <see cref="HasDeletePermission"/>.
+    /// Default implementation calls the synchronous <see cref="HasDeletePermission"/>.
+    /// </summary>
+    public virtual Task<bool> HasDeletePermissionAsync(HttpContext context)
+        => Task.FromResult(HasDeletePermission(context));
 
     // ── CRUD — mirrors CrudController<TEntity, TKey, TDbContext> API ──────────
 
@@ -107,35 +175,85 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
 
     /// <summary>
     /// Applies additional filtering to <paramref name="query"/> based on
-    /// <paramref name="p"/>. The base implementation is a no-op; override to
-    /// add search-field filtering, extra WHERE clauses, etc.
+    /// <paramref name="p"/>. When <see cref="SearchFields"/> is non-empty and
+    /// <see cref="CrudQueryParams.Search"/> is set, automatically filters to rows where
+    /// any of the designated string properties contain the search term (case-insensitive).
+    /// The filter is applied in-memory (via <c>AsEnumerable()</c>) which is appropriate
+    /// for the EF Core InMemory provider; for production SQL databases, consider overriding
+    /// to use EF.Functions.Like() or an expression tree for server-side evaluation.
+    /// Override to add extra WHERE clauses.
     /// Maps to Python <c>SqlalchemyCrud.get_select()</c> filter composition.
     /// </summary>
     public virtual IQueryable<TEntity> ApplyFilter(IQueryable<TEntity> query, CrudQueryParams p)
-        => query;
+    {
+        if (SearchFields.Length > 0 && !string.IsNullOrEmpty(p.Search))
+        {
+            var search = p.Search;
+            query = query
+                .AsEnumerable()
+                .Where(entity =>
+                {
+                    foreach (var fieldName in SearchFields)
+                    {
+                        var prop = typeof(TEntity).GetProperty(
+                            fieldName,
+                            BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                        if (prop?.PropertyType == typeof(string))
+                        {
+                            var value = (string?)prop.GetValue(entity);
+                            if (value != null &&
+                                value.Contains(search, StringComparison.OrdinalIgnoreCase))
+                                return true;
+                        }
+                    }
+                    return false;
+                })
+                .AsQueryable();
+        }
+        return query;
+    }
 
     /// <summary>
     /// Applies ORDER BY to <paramref name="query"/> using <see cref="CrudQueryParams.OrderBy"/>
-    /// and <see cref="CrudQueryParams.OrderDir"/>. Property lookup is case-insensitive.
-    /// Returns the query unchanged when <see cref="CrudQueryParams.OrderBy"/> is null or
-    /// refers to a non-existent property.
+    /// and <see cref="CrudQueryParams.OrderDir"/>. When <see cref="CrudQueryParams.OrderBy"/> is
+    /// null and <see cref="DefaultOrdering"/> is set, the default ordering is used instead.
+    /// A leading <c>"-"</c> in <see cref="DefaultOrdering"/> means descending.
+    /// Property lookup is case-insensitive.
+    /// Returns the query unchanged when no ordering column can be resolved.
     /// </summary>
     public virtual IQueryable<TEntity> ApplyOrdering(IQueryable<TEntity> query, CrudQueryParams p)
     {
-        if (string.IsNullOrEmpty(p.OrderBy))
+        var orderBy  = p.OrderBy;
+        var orderDir = p.OrderDir;
+
+        if (string.IsNullOrEmpty(orderBy) && DefaultOrdering is not null)
+        {
+            if (DefaultOrdering.StartsWith('-'))
+            {
+                orderBy  = DefaultOrdering[1..];
+                orderDir = "desc";
+            }
+            else
+            {
+                orderBy  = DefaultOrdering;
+                orderDir = "asc";
+            }
+        }
+
+        if (string.IsNullOrEmpty(orderBy))
             return query;
 
         var prop = typeof(TEntity).GetProperty(
-            p.OrderBy,
+            orderBy,
             BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
         if (prop is null)
             return query;
 
-        var param      = Expression.Parameter(typeof(TEntity), "x");
-        var member     = Expression.Property(param, prop);
+        var param       = Expression.Parameter(typeof(TEntity), "x");
+        var member      = Expression.Property(param, prop);
         var keySelector = Expression.Lambda(member, param);
 
-        var methodName = string.Equals(p.OrderDir, "desc", StringComparison.OrdinalIgnoreCase)
+        var methodName = string.Equals(orderDir, "desc", StringComparison.OrdinalIgnoreCase)
             ? "OrderByDescending"
             : "OrderBy";
 
@@ -255,16 +373,67 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
     /// <summary>
     /// Returns the amis column definitions for the list table, derived from the
     /// entity model via <see cref="TableModelParser.ParseColumns"/>.
+    /// When <see cref="ListDisplay"/> is non-empty, only the specified columns are
+    /// returned, in the declared order.
     /// </summary>
-    protected virtual IReadOnlyList<TableColumn> GetColumns() =>
-        TableModelParser.ParseColumns(typeof(TEntity));
+    protected virtual IReadOnlyList<TableColumn> GetColumns()
+    {
+        var allColumns = TableModelParser.ParseColumns(typeof(TEntity));
+        if (ListDisplay.Length == 0)
+            return allColumns;
+
+        return ListDisplay
+            .Select(displayName => allColumns.FirstOrDefault(c =>
+                string.Equals(c.Name,  displayName, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(c.Label, displayName, StringComparison.OrdinalIgnoreCase)))
+            .Where(c => c is not null)
+            .Cast<TableColumn>()
+            .ToList();
+    }
 
     /// <summary>
     /// Returns the amis form fields for create/update dialogs, derived from the
     /// entity model via <see cref="TableModelParser.ParseFormFields"/>.
+    /// Fields listed in <see cref="ReadonlyFields"/> are marked with
+    /// <c>Disabled = true</c>.
     /// </summary>
-    protected virtual IReadOnlyList<object> GetFormFields() =>
-        TableModelParser.ParseFormFields(typeof(TEntity));
+    protected virtual IReadOnlyList<object> GetFormFields()
+    {
+        var fields = TableModelParser.ParseFormFields(typeof(TEntity)).ToList();
+        if (ReadonlyFields.Length == 0)
+            return fields;
+
+        var readonlySet = new HashSet<string>(ReadonlyFields, StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < fields.Count; i++)
+        {
+            var name = GetFormFieldName(fields[i]);
+            if (name is not null && readonlySet.Contains(name))
+                SetFormFieldDisabled(fields[i]);
+        }
+        return fields;
+    }
+
+    private static string? GetFormFieldName(object field) => field switch
+    {
+        InputText f      => f.Name,
+        InputNumber f    => f.Name,
+        Switch f         => f.Name,
+        InputDatetime f  => f.Name,
+        InputDate f      => f.Name,
+        _                => null
+    };
+
+    private static void SetFormFieldDisabled(object field)
+    {
+        switch (field)
+        {
+            case InputText f:     f.Disabled = true; break;
+            case InputNumber f:   f.Disabled = true; break;
+            case Switch f:        f.Disabled = true; break;
+            case InputDatetime f: f.Disabled = true; break;
+            case InputDate f:     f.Disabled = true; break;
+        }
+    }
 
     /// <summary>
     /// Builds the create-button <see cref="Button"/> that opens a Dialog with a
@@ -327,6 +496,8 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
     /// <summary>
     /// Builds the full amis <see cref="Page"/> schema for this model admin, including
     /// the CRUD component with list columns, create/update/delete actions.
+    /// Uses <see cref="ListPerPage"/> for pagination and honours
+    /// <see cref="EnableExportCsv"/>/<see cref="EnableExportExcel"/> for the footer toolbar.
     /// Maps to Python <c>ModelAdmin.get_page()</c>.
     /// </summary>
     public override Page BuildPageSchema()
@@ -338,6 +509,10 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
             Buttons = [GetUpdateAction(), GetDeleteAction()]
         });
 
+        var footerToolbar = new List<object> { "statistics", "switch-per-page", "pagination" };
+        if (EnableExportCsv)   footerToolbar.Add("export-csv");
+        if (EnableExportExcel) footerToolbar.Add("export-excel");
+
         return new Page
         {
             Title = Label,
@@ -346,8 +521,9 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
                 Name          = RouterPath + "Crud",
                 SyncLocation  = false,
                 Api           = $"get:{RouterPrefix}",
-                PerPage       = 10,
+                PerPage       = ListPerPage,
                 HeaderToolbar = [GetCreateAction(), "bulkActions"],
+                FooterToolbar = footerToolbar,
                 Columns       = columns
             }
         };
@@ -358,7 +534,7 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
     /// <summary>
     /// Registers the four standard CRUD endpoints on the given
     /// <see cref="WebApplication"/>. Each endpoint checks the corresponding
-    /// permission hook before executing; a denied request returns HTTP 401.
+    /// async permission hook before executing; a denied request returns HTTP 401.
     /// Mirrors Python's <c>@router.add_api_route</c> decorators.
     /// </summary>
     public override void RegisterRoutes(WebApplication app)
@@ -367,7 +543,7 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
 
         app.MapGet(prefix, async (HttpContext ctx) =>
         {
-            if (!HasReadPermission(ctx))
+            if (!await HasReadPermissionAsync(ctx))
                 return Results.Json(AdminApiResponse.Fail("Unauthorized"), statusCode: 401);
 
             var queryParams = CrudQueryParams.FromQuery(ctx.Request.Query);
@@ -377,7 +553,7 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
 
         app.MapPost(prefix, async (TEntity entity, HttpContext ctx) =>
         {
-            if (!HasCreatePermission(ctx))
+            if (!await HasCreatePermissionAsync(ctx))
                 return Results.Json(AdminApiResponse.Fail("Unauthorized"), statusCode: 401);
 
             if (!TryValidateEntity(entity, out var errorMessage))
@@ -389,7 +565,7 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
 
         app.MapPut(prefix + "/{id}", async (TKey id, TEntity entity, HttpContext ctx) =>
         {
-            if (!HasUpdatePermission(ctx))
+            if (!await HasUpdatePermissionAsync(ctx))
                 return Results.Json(AdminApiResponse.Fail("Unauthorized"), statusCode: 401);
 
             if (!TryValidateEntity(entity, out var errorMessage))
@@ -403,7 +579,7 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
 
         app.MapDelete(prefix + "/{id}", async (TKey id, HttpContext ctx) =>
         {
-            if (!HasDeletePermission(ctx))
+            if (!await HasDeletePermissionAsync(ctx))
                 return Results.Json(AdminApiResponse.Fail("Unauthorized"), statusCode: 401);
 
             return await DeleteItemAsync(id)

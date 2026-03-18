@@ -85,4 +85,19 @@ public sealed class Crud : AmisNode
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? SaveFailed { get; set; }
     }
+
+    /// <summary>
+    /// Whether to allow CSV export from the CRUD toolbar.
+    /// When <c>true</c>, <c>"export-csv"</c> is added to <see cref="FooterToolbar"/> automatically
+    /// during schema generation.
+    /// </summary>
+    [JsonIgnore]
+    public bool EnableExportCsv { get; set; }
+
+    /// <summary>
+    /// Whether to allow Excel export from the CRUD toolbar.
+    /// When <c>true</c>, <c>"export-excel"</c> is added to <see cref="FooterToolbar"/> automatically.
+    /// </summary>
+    [JsonIgnore]
+    public bool EnableExportExcel { get; set; }
 }

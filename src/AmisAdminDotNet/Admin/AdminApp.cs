@@ -25,6 +25,7 @@ public class AdminApp
 {
     private readonly IServiceProvider _services;
     private readonly List<RouterAdmin> _admins = [];
+    private readonly List<AdminGroup> _groups  = [];
 
     /// <summary>Display name of this app group (used in tab labels).</summary>
     public string Name { get; }
@@ -68,34 +69,53 @@ public class AdminApp
     }
 
     /// <summary>
-    /// Registers all HTTP routes for every admin in <see cref="Admins"/> on the
-    /// given <see cref="WebApplication"/>. Mirrors Python's
+    /// Creates a named <see cref="AdminGroup"/> within this app.
+    /// Maps to Python's nested <c>AdminGroup</c> registration.
+    /// </summary>
+    public AdminGroup CreateGroup(string name, string? icon = null, int sort = 0)
+    {
+        var group = new AdminGroup(name, this) { Icon = icon, Sort = sort };
+        _groups.Add(group);
+        return group;
+    }
+
+    /// <summary>
+    /// Registers all HTTP routes for every admin in <see cref="Admins"/> (and all
+    /// groups) on the given <see cref="WebApplication"/>. Mirrors Python's
     /// <c>app.include_router(admin.router)</c> calls.
     /// </summary>
     public void Mount(WebApplication app)
     {
         foreach (var admin in _admins)
             admin.RegisterRoutes(app);
+        foreach (var group in _groups)
+            group.Mount(app);
     }
 
     /// <summary>
-    /// Builds an amis <see cref="Tabs"/> node containing one tab per registered admin.
-    /// Tabs are ordered by <see cref="PageSchemaOptions.Sort"/> (descending); admins
-    /// with <see cref="PageSchemaOptions.IsDefaultPage"/> set to <c>true</c> are always
-    /// placed first. Each tab body is produced by the admin's own <c>BuildPageSchema()</c>.
+    /// Builds an amis <see cref="Tabs"/> node containing one tab per registered admin
+    /// plus one nested <see cref="Tabs"/> per <see cref="AdminGroup"/>.
+    /// Direct admins are ordered by <see cref="PageSchemaOptions.Sort"/> (descending);
+    /// admins with <see cref="PageSchemaOptions.IsDefaultPage"/> set to <c>true</c> are
+    /// always placed first. Groups are appended after, ordered by
+    /// <see cref="AdminGroup.Sort"/> descending.
     /// </summary>
     public Tabs BuildTabsSchema()
     {
-        var sorted = _admins
-            .OrderByDescending(a => a.PageSchema.IsDefaultPage)
-            .ThenByDescending(a => a.PageSchema.Sort)
-            .ToList();
+        var tabs = new List<Tab>();
 
-        return new Tabs
-        {
-            TabList = sorted
-                .Select(a => new Tab { Title = a.PageSchema.Label, Body = a.BuildPageSchema() })
-                .ToList()
-        };
+        // Direct admins (not in any group)
+        var sortedAdmins = _admins
+            .OrderByDescending(a => a.PageSchema.IsDefaultPage)
+            .ThenByDescending(a => a.PageSchema.Sort);
+        tabs.AddRange(sortedAdmins.Select(a =>
+            new Tab { Title = a.PageSchema.Label, Body = a.BuildPageSchema() }));
+
+        // Groups — each renders as a nested Tabs
+        var sortedGroups = _groups.OrderByDescending(g => g.Sort);
+        tabs.AddRange(sortedGroups.Select(g =>
+            new Tab { Title = g.Name, Body = g.BuildTabsSchema() }));
+
+        return new Tabs { TabList = tabs };
     }
 }

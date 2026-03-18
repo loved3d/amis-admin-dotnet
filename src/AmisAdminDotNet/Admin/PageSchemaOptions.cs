@@ -28,4 +28,10 @@ public record PageSchemaOptions
     /// Maps to Python <c>PageSchema.is_default_page</c>.
     /// </summary>
     public bool IsDefaultPage { get; init; } = false;
+
+    /// <summary>
+    /// When set, this admin renders as a hyperlink in the menu rather than a page tab.
+    /// Maps to Python <c>PageSchema.link</c>.
+    /// </summary>
+    public string? Link { get; init; }
 }
