@@ -1,181 +1,156 @@
+using AmisAdminDotNet.AmisComponents;
+
 namespace AmisAdminDotNet.Services;
 
+/// <summary>
+/// Builds the amis JSON schema for the admin UI using typed <see cref="AmisNode"/>
+/// component classes rather than anonymous objects, mirroring how
+/// fastapi-amis-admin assembles its page schema from Python dataclasses.
+/// </summary>
 public sealed class AdminSchemaService
 {
-    public object BuildAdminPageSchema()
+    /// <summary>
+    /// Returns a strongly-typed <see cref="Page"/> amis schema for the admin UI,
+    /// composed entirely of typed <see cref="AmisAdminDotNet.AmisComponents.AmisNode"/>
+    /// sub-classes rather than anonymous objects.
+    /// </summary>
+    public Page BuildAdminPageSchema()
     {
-        return new
+        return new Page
         {
-            type = "page",
-            title = "Amis Admin .NET Core",
-            subTitle = "Backend-generated amis JSON with a minimal .NET admin integration.",
-            body = new object[]
+            Title = "Amis Admin .NET Core",
+            SubTitle = "Backend-generated amis JSON with a minimal .NET admin integration.",
+            Body = new Tabs
             {
-                new
-                {
-                    type = "tabs",
-                    tabs = new object[]
+                TabList =
+                [
+                    new Tab
                     {
-                        new
+                        Title = "Dashboard",
+                        Body = new object[]
                         {
-                            title = "Dashboard",
-                            body = new object[]
+                            new Tpl
                             {
-                                new
-                                {
-                                    type = "tpl",
-                                    tpl = "<div class='text-xl'>Welcome to Amis Admin .NET Core</div><p>This sample mirrors the core fastapi-amis-admin pattern: the backend generates amis schema and CRUD APIs.</p>"
-                                },
-                                new
-                                {
-                                    type = "alert",
-                                    level = "info",
-                                    body = "This repository started almost empty, so this implementation provides a minimal runnable .NET Core migration skeleton."
-                                }
-                            }
-                        },
-                        new
-                        {
-                            title = "Users",
-                            body = new object[]
+                                Template = "<div class='text-xl'>Welcome to Amis Admin .NET Core</div><p>This sample mirrors the core fastapi-amis-admin pattern: the backend generates amis schema and CRUD APIs.</p>"
+                            },
+                            new Alert
                             {
-                                new
-                                {
-                                    type = "crud",
-                                    name = "userCrud",
-                                    syncLocation = false,
-                                    api = "get:/api/admin/users",
-                                    perPage = 10,
-                                    headerToolbar = new object[]
-                                    {
-                                        new
-                                        {
-                                            type = "button",
-                                            label = "Create user",
-                                            level = "primary",
-                                            actionType = "dialog",
-                                            dialog = new
-                                            {
-                                                title = "Create user",
-                                                body = BuildUserForm("post:/api/admin/users")
-                                            }
-                                        },
-                                        "bulkActions"
-                                    },
-                                    filter = new
-                                    {
-                                        title = "Search",
-                                        submitText = "Apply",
-                                        body = new object[]
-                                        {
-                                            new
-                                            {
-                                                type = "input-text",
-                                                name = "keywords",
-                                                label = "Keywords",
-                                                placeholder = "Search by name, email or role"
-                                            }
-                                        }
-                                    },
-                                    columns = new object[]
-                                    {
-                                        new { name = "id", label = "ID" },
-                                        new { name = "name", label = "Name" },
-                                        new { name = "email", label = "Email" },
-                                        new { name = "role", label = "Role" },
-                                        new
-                                        {
-                                            name = "enabled",
-                                            label = "Enabled",
-                                            type = "mapping",
-                                            map = new Dictionary<string, string>
-                                            {
-                                                ["true"] = "<span class='label label-success'>Enabled</span>",
-                                                ["false"] = "<span class='label label-danger'>Disabled</span>"
-                                            }
-                                        },
-                                        new
-                                        {
-                                            name = "createdAt",
-                                            label = "Created at",
-                                            type = "datetime",
-                                            format = "YYYY-MM-DD HH:mm:ss"
-                                        },
-                                        new
-                                        {
-                                            type = "operation",
-                                            label = "Actions",
-                                            buttons = new object[]
-                                            {
-                                                new
-                                                {
-                                                    type = "button",
-                                                    label = "Edit",
-                                                    level = "link",
-                                                    actionType = "dialog",
-                                                    dialog = new
-                                                    {
-                                                        title = "Edit user",
-                                                        body = BuildUserForm("put:/api/admin/users/${id}")
-                                                    }
-                                                },
-                                                new
-                                                {
-                                                    type = "button",
-                                                    label = "Delete",
-                                                    level = "link",
-                                                    className = "text-danger",
-                                                    actionType = "ajax",
-                                                    confirmText = "Delete user ${name}?",
-                                                    api = "delete:/api/admin/users/${id}"
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                                Level = "info",
+                                Body = "This repository started almost empty, so this implementation provides a minimal runnable .NET Core migration skeleton."
                             }
                         }
+                    },
+                    new Tab
+                    {
+                        Title = "Users",
+                        Body = new object[] { BuildUserCrud() }
                     }
-                }
+                ]
             }
         };
     }
 
-    private static object BuildUserForm(string api) => new
+    private static Crud BuildUserCrud() => new()
     {
-        type = "form",
-        mode = "horizontal",
-        api,
-        reload = "userCrud",
-        body = new object[]
+        Name = "userCrud",
+        SyncLocation = false,
+        Api = "get:/api/admin/users",
+        PerPage = 10,
+        HeaderToolbar =
+        [
+            new Button
+            {
+                Label = "Create user",
+                Level = "primary",
+                ActionType = "dialog",
+                Dialog = new Dialog
+                {
+                    Title = "Create user",
+                    Body = BuildUserForm("post:/api/admin/users")
+                }
+            },
+            "bulkActions"
+        ],
+        Filter = new Form
         {
-            new
+            Title = "Search",
+            SubmitText = "Apply",
+            Body =
+            [
+                new InputText
+                {
+                    Name = "keywords",
+                    Label = "Keywords",
+                    Placeholder = "Search by name, email or role"
+                }
+            ]
+        },
+        Columns =
+        [
+            new TableColumn { Name = "id",    Label = "ID" },
+            new TableColumn { Name = "name",  Label = "Name" },
+            new TableColumn { Name = "email", Label = "Email" },
+            new TableColumn { Name = "role",  Label = "Role" },
+            new TableColumn
             {
-                type = "input-text",
-                name = "name",
-                label = "Name",
-                required = true
+                Name  = "enabled",
+                Label = "Enabled",
+                Type  = "mapping",
+                Map   = new Dictionary<string, string>
+                {
+                    ["true"]  = "<span class='label label-success'>Enabled</span>",
+                    ["false"] = "<span class='label label-danger'>Disabled</span>"
+                }
             },
-            new
+            new TableColumn
             {
-                type = "input-email",
-                name = "email",
-                label = "Email",
-                required = true
+                Name   = "createdAt",
+                Label  = "Created at",
+                Type   = "datetime",
+                Format = "YYYY-MM-DD HH:mm:ss"
             },
-            new
+            new OperationColumn
             {
-                type = "input-text",
-                name = "role",
-                label = "Role",
-                required = true
-            },
-            new
-            {
-                type = "switch",
-                name = "enabled",
-                label = "Enabled"
+                Label = "Actions",
+                Buttons =
+                [
+                    new Button
+                    {
+                        Label      = "Edit",
+                        Level      = "link",
+                        ActionType = "dialog",
+                        Dialog     = new Dialog
+                        {
+                            Title = "Edit user",
+                            Body  = BuildUserForm("put:/api/admin/users/${id}")
+                        }
+                    },
+                    new Button
+                    {
+                        Label       = "Delete",
+                        Level       = "link",
+                        ClassName   = "text-danger",
+                        ActionType  = "ajax",
+                        ConfirmText = "Delete user ${name}?",
+                        Api         = "delete:/api/admin/users/${id}"
+                    }
+                ]
             }
-        }
+        ]
+    };
+
+    private static Form BuildUserForm(string api) => new()
+    {
+        Mode   = "horizontal",
+        Api    = api,
+        Reload = "userCrud",
+        Body   =
+        [
+            new InputText  { Name = "name",    Label = "Name",    Required = true },
+            new InputEmail { Name = "email",   Label = "Email",   Required = true },
+            new InputText  { Name = "role",    Label = "Role",    Required = true },
+            new Switch     { Name = "enabled", Label = "Enabled" }
+        ]
     };
 }
+

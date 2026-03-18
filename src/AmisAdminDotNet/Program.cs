@@ -1,19 +1,51 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using AmisAdminDotNet.AmisComponents;
 using AmisAdminDotNet.Models;
 using AmisAdminDotNet.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ─── JSON serialization ────────────────────────────────────────────────────
+// Configure camelCase naming + ignore null values to match the amis SDK
+// convention and the Python fastapi-amis-admin JSON output.
+builder.Services.ConfigureHttpJsonOptions(opts =>
+{
+    opts.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+    opts.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+});
+
+// ─── CORS ──────────────────────────────────────────────────────────────────
+var adminSettings = builder.Configuration
+    .GetSection("AdminSite")
+    .Get<AdminSiteSettings>() ?? new AdminSiteSettings();
+
+builder.Services.AddSingleton(adminSettings);
+
+if (adminSettings.CorsOrigins.Length > 0)
+{
+    builder.Services.AddCors(opts =>
+        opts.AddDefaultPolicy(policy =>
+            policy.WithOrigins(adminSettings.CorsOrigins)
+                  .AllowAnyMethod()
+                  .AllowAnyHeader()));
+}
+
+// ─── Application services ──────────────────────────────────────────────────
 builder.Services.AddSingleton<IUserStore, InMemoryUserStore>();
 builder.Services.AddSingleton<AdminSchemaService>();
 
 var app = builder.Build();
+
+if (adminSettings.CorsOrigins.Length > 0)
+    app.UseCors();
 
 app.MapGet("/", () => Results.Redirect("/admin"));
 
 app.MapGet("/admin", () => Results.Content(AdminHostPage.Html, "text/html; charset=utf-8"));
 
 app.MapGet("/api/admin/schema", (AdminSchemaService schemaService) =>
-    Results.Json(schemaService.BuildAdminPageSchema()));
+    Results.Json(schemaService.BuildAdminPageSchema(), AmisJsonOptions.Default));
 
 app.MapGet("/api/admin/users", (IUserStore userStore, string? keywords, int page = 1, int perPage = 10) =>
 {
@@ -55,3 +87,4 @@ app.MapDelete("/api/admin/users/{id:int}", (int id, IUserStore userStore) =>
 app.Run();
 
 public partial class Program;
+

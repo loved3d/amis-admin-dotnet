@@ -2,47 +2,30 @@ using AmisAdminDotNet.Models;
 
 namespace AmisAdminDotNet.Services;
 
+/// <summary>
+/// Normalises (trims whitespace) and validates a <see cref="SaveUserRequest"/>.
+/// Validation rules are defined in <see cref="SaveUserRequestValidator"/> (FluentValidation).
+/// </summary>
 public static class UserRequestValidator
 {
+    private static readonly SaveUserRequestValidator _validator = new();
+
     public static bool TryNormalize(SaveUserRequest request, out SaveUserRequest normalized, out string? error)
     {
-        var name = request.Name?.Trim();
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            normalized = request;
-            error = "Name is required.";
-            return false;
-        }
-
-        var email = request.Email?.Trim();
-        if (string.IsNullOrWhiteSpace(email))
-        {
-            normalized = request;
-            error = "Email is required.";
-            return false;
-        }
-
-        if (!email.Contains('@', StringComparison.Ordinal))
-        {
-            normalized = request;
-            error = "Email must be a valid address.";
-            return false;
-        }
-
-        var role = request.Role?.Trim();
-        if (string.IsNullOrWhiteSpace(role))
-        {
-            normalized = request;
-            error = "Role is required.";
-            return false;
-        }
-
+        // Trim whitespace first so validation messages are accurate.
         normalized = request with
         {
-            Name = name,
-            Email = email,
-            Role = role
+            Name = request.Name?.Trim(),
+            Email = request.Email?.Trim(),
+            Role = request.Role?.Trim()
         };
+
+        var result = _validator.Validate(normalized);
+        if (!result.IsValid)
+        {
+            error = result.Errors[0].ErrorMessage;
+            return false;
+        }
 
         error = null;
         return true;
