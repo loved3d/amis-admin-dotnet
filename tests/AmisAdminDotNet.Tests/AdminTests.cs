@@ -152,6 +152,18 @@ public sealed class ModelAdminTests
         Assert.Equal(1, result.Total);
         Assert.Equal("Widget", result.Items[0].Title);
     }
+
+    [Fact]
+    public async Task CreateItemAsync_AndGetItemsAsync_WorksThroughModelAdmin()
+    {
+        var admin = CreateAdmin();
+
+        await admin.CreateItemAsync(new ProductEntity { Id = 1, Title = "Widget", Price = 9.99m });
+        var result = await admin.GetItemsAsync(page: 1, perPage: 10);
+
+        Assert.Equal(1, result.Total);
+        Assert.Equal("Widget", result.Items[0].Title);
+    }
 }
 
 // ── AdminApp tests ────────────────────────────────────────────────────────────

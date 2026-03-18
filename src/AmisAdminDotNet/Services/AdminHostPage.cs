@@ -2,16 +2,23 @@ namespace AmisAdminDotNet.Services;
 
 public static class AdminHostPage
 {
-    public const string Html = """
+    public static string Html => RenderHtml(new AppSettings());
+
+    public static string RenderHtml(AppSettings settings)
+    {
+        var amisCdn = settings.AmisCdn.TrimEnd('/');
+        var schemaApiPath = settings.SchemaApiPath;
+
+        return $$"""
 <!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Amis Admin .NET Core</title>
-  <link rel="stylesheet" href="https://unpkg.com/amis@6.11.0/sdk/sdk.css" />
-  <link rel="stylesheet" href="https://unpkg.com/amis@6.11.0/sdk/helper.css" />
-  <link rel="stylesheet" href="https://unpkg.com/amis@6.11.0/sdk/iconfont.css" />
+  <link rel="stylesheet" href="{{amisCdn}}/sdk.css" />
+  <link rel="stylesheet" href="{{amisCdn}}/helper.css" />
+  <link rel="stylesheet" href="{{amisCdn}}/iconfont.css" />
   <style>
     html, body, #root { height: 100%; margin: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f7fa; }
@@ -27,7 +34,7 @@ public static class AdminHostPage
   <div id="root"></div>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/amis@6.11.0/sdk/sdk.js"></script>
+  <script src="{{amisCdn}}/sdk.js"></script>
   <script>
     function escapeHtml(value) {
       return String(value)
@@ -75,7 +82,7 @@ public static class AdminHostPage
         });
     }
 
-    fetch('/api/admin/schema')
+    fetch('{{schemaApiPath}}')
       .then(function (response) { return response.json(); })
       .then(function (schema) {
         if (typeof amisRequire === 'function') {
@@ -96,4 +103,5 @@ public static class AdminHostPage
 </body>
 </html>
 """;
+    }
 }

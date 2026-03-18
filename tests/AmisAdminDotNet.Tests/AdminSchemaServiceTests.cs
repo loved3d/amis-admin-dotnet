@@ -19,4 +19,15 @@ public sealed class AdminSchemaServiceTests
         Assert.Contains("put:/api/admin/users/${id}", json);
         Assert.Contains("delete:/api/admin/users/${id}", json);
     }
+
+    [Fact]
+    public void BuildAdminPageSchema_IsCached()
+    {
+        var service = new AdminSchemaService();
+
+        var first = service.BuildAdminPageSchema();
+        var second = service.BuildAdminPageSchema();
+
+        Assert.Same(first, second);
+    }
 }

@@ -57,9 +57,20 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
         page    = Math.Max(page, 1);
         perPage = Math.Clamp(perPage, 1, 100);
 
-        var set   = Db.Set<TEntity>();
+        var set   = Db.Set<TEntity>().AsNoTracking();
         var total = set.Count();
         var items = set.Skip((page - 1) * perPage).Take(perPage).ToList();
+        return new PagedResult<TEntity>(items, total);
+    }
+
+    public virtual async Task<PagedResult<TEntity>> GetItemsAsync(int page = 1, int perPage = 10)
+    {
+        page = Math.Max(page, 1);
+        perPage = Math.Clamp(perPage, 1, 100);
+
+        var set = Db.Set<TEntity>().AsNoTracking();
+        var total = await set.CountAsync();
+        var items = await set.Skip((page - 1) * perPage).Take(perPage).ToListAsync();
         return new PagedResult<TEntity>(items, total);
     }
 
@@ -71,6 +82,13 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
     {
         Db.Set<TEntity>().Add(entity);
         Db.SaveChanges();
+        return entity;
+    }
+
+    public virtual async Task<TEntity> CreateItemAsync(TEntity entity)
+    {
+        Db.Set<TEntity>().Add(entity);
+        await Db.SaveChangesAsync();
         return entity;
     }
 
@@ -88,6 +106,16 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
         return existing;
     }
 
+    public virtual async Task<TEntity?> UpdateItemAsync(TKey id, TEntity entity)
+    {
+        var existing = await Db.Set<TEntity>().FindAsync(new object?[] { id });
+        if (existing is null) return null;
+
+        Db.Entry(existing).CurrentValues.SetValues(entity);
+        await Db.SaveChangesAsync();
+        return existing;
+    }
+
     /// <summary>
     /// Removes an entity by id. Maps to Python <c>SqlalchemyCrud.delete()</c>.
     /// <c>DELETE {RouterPrefix}/{id}</c>
@@ -99,6 +127,16 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
 
         Db.Set<TEntity>().Remove(existing);
         Db.SaveChanges();
+        return true;
+    }
+
+    public virtual async Task<bool> DeleteItemAsync(TKey id)
+    {
+        var existing = await Db.Set<TEntity>().FindAsync(new object?[] { id });
+        if (existing is null) return false;
+
+        Db.Set<TEntity>().Remove(existing);
+        await Db.SaveChangesAsync();
         return true;
     }
 
@@ -216,32 +254,40 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
     {
         var prefix = RouterPrefix;
 
-        app.MapGet(prefix, (int page, int perPage) =>
+        app.MapGet(prefix, async (int page, int perPage) =>
         {
-            var result = GetItems(page, perPage);
+            var result = await GetItemsAsync(page, perPage);
             return Results.Json(AdminApiResponse.Ok(new { items = result.Items, total = result.Total }));
         });
 
-        app.MapPost(prefix, (TEntity entity) =>
+        app.MapPost(prefix, async (TEntity entity) =>
         {
-            var created = CreateItem(entity);
+            if (!DataAnnotationsModelValidator.TryValidate(entity, out var errors))
+                return Results.Json(AdminApiResponse.Fail(FormatValidationError(errors)));
+
+            var created = await CreateItemAsync(entity);
             return Results.Json(AdminApiResponse.Ok(new { item = created }, $"{Label} created."));
         });
 
-        app.MapPut(prefix + "/{id}", (TKey id, TEntity entity) =>
+        app.MapPut(prefix + "/{id}", async (TKey id, TEntity entity) =>
         {
-            var updated = UpdateItem(id, entity);
+            if (!DataAnnotationsModelValidator.TryValidate(entity, out var errors))
+                return Results.Json(AdminApiResponse.Fail(FormatValidationError(errors)));
+
+            var updated = await UpdateItemAsync(id, entity);
             return updated is null
                 ? Results.Json(AdminApiResponse.Fail($"{Label} not found."))
                 : Results.Json(AdminApiResponse.Ok(new { item = updated }, $"{Label} updated."));
         });
 
-        app.MapDelete(prefix + "/{id}", (TKey id) =>
+        app.MapDelete(prefix + "/{id}", async (TKey id) =>
         {
-            return DeleteItem(id)
+            return await DeleteItemAsync(id)
                 ? Results.Json(AdminApiResponse.Ok(msg: $"{Label} deleted."))
                 : Results.Json(AdminApiResponse.Fail($"{Label} not found."));
         });
     }
-}
 
+    private static string FormatValidationError(IReadOnlyDictionary<string, string[]> errors) =>
+        string.Join("; ", errors.SelectMany(entry => entry.Value.Select(message => $"{entry.Key}: {message}")));
+}

@@ -1,4 +1,5 @@
 using AmisAdminDotNet.AmisComponents;
+using Microsoft.Extensions.Caching.Memory;
 using CrudComponent = AmisAdminDotNet.AmisComponents.Crud;
 
 namespace AmisAdminDotNet.Services;
@@ -10,6 +11,17 @@ namespace AmisAdminDotNet.Services;
 /// </summary>
 public sealed class AdminSchemaService
 {
+    private const string PageCacheKey = "admin-schema:page";
+    private const string JsonCacheKey = "admin-schema:json";
+    private readonly IMemoryCache _cache;
+    private readonly II18nService _i18n;
+
+    public AdminSchemaService(II18nService? i18n = null, IMemoryCache? cache = null)
+    {
+        _i18n = i18n ?? new I18nService();
+        _cache = cache ?? new MemoryCache(new MemoryCacheOptions());
+    }
+
     /// <summary>
     /// Returns a strongly-typed <see cref="Page"/> amis schema for the admin UI,
     /// composed entirely of typed <see cref="AmisAdminDotNet.AmisComponents.AmisNode"/>
@@ -17,17 +29,19 @@ public sealed class AdminSchemaService
     /// </summary>
     public Page BuildAdminPageSchema()
     {
-        return new Page
+        return _cache.GetOrCreate(PageCacheKey, _ => new Page
         {
-            Title = "Amis Admin .NET Core",
-            SubTitle = "Backend-generated amis JSON with a minimal .NET admin integration.",
+            Title = _i18n.Translate("admin.title", "Amis Admin .NET Core"),
+            SubTitle = _i18n.Translate(
+                "admin.subtitle",
+                "Backend-generated amis JSON with a minimal .NET admin integration."),
             Body = new Tabs
             {
                 TabList =
                 [
                     new Tab
                     {
-                        Title = "Dashboard",
+                        Title = _i18n.Translate("tabs.dashboard", "Dashboard"),
                         Body = new object[]
                         {
                             new Tpl
@@ -43,15 +57,18 @@ public sealed class AdminSchemaService
                     },
                     new Tab
                     {
-                        Title = "Users",
+                        Title = _i18n.Translate("tabs.users", "Users"),
                         Body = new object[] { BuildUserCrud() }
                     }
                 ]
             }
-        };
+        })!;
     }
 
-    private static CrudComponent BuildUserCrud() => new()
+    public string BuildAdminPageJson() =>
+        _cache.GetOrCreate(JsonCacheKey, _ => BuildAdminPageSchema().ToJson())!;
+
+    private CrudComponent BuildUserCrud() => new()
     {
         Name = "userCrud",
         SyncLocation = false,
@@ -61,12 +78,12 @@ public sealed class AdminSchemaService
         [
             new Button
             {
-                Label = "Create user",
+                Label = _i18n.Translate("users.create", "Create user"),
                 Level = "primary",
                 ActionType = "dialog",
                 Dialog = new Dialog
                 {
-                    Title = "Create user",
+                    Title = _i18n.Translate("users.create", "Create user"),
                     Body = BuildUserForm("post:/api/admin/users")
                 }
             },
@@ -74,15 +91,15 @@ public sealed class AdminSchemaService
         ],
         Filter = new Form
         {
-            Title = "Search",
-            SubmitText = "Apply",
+            Title = _i18n.Translate("common.search", "Search"),
+            SubmitText = _i18n.Translate("common.apply", "Apply"),
             Body =
             [
                 new InputText
                 {
                     Name = "keywords",
-                    Label = "Keywords",
-                    Placeholder = "Search by name, email or role"
+                    Label = _i18n.Translate("common.keywords", "Keywords"),
+                    Placeholder = _i18n.Translate("users.searchPlaceholder", "Search by name, email or role")
                 }
             ]
         },
@@ -117,22 +134,22 @@ public sealed class AdminSchemaService
                 [
                     new Button
                     {
-                        Label      = "Edit",
+                        Label      = _i18n.Translate("common.edit", "Edit"),
                         Level      = "link",
                         ActionType = "dialog",
                         Dialog     = new Dialog
                         {
-                            Title = "Edit user",
+                            Title = _i18n.Translate("users.edit", "Edit user"),
                             Body  = BuildUserForm("put:/api/admin/users/${id}")
                         }
                     },
                     new Button
                     {
-                        Label       = "Delete",
+                        Label       = _i18n.Translate("common.delete", "Delete"),
                         Level       = "link",
                         ClassName   = "text-danger",
                         ActionType  = "ajax",
-                        ConfirmText = "Delete user ${name}?",
+                        ConfirmText = _i18n.Translate("users.deleteConfirm", "Delete user ${name}?"),
                         Api         = "delete:/api/admin/users/${id}"
                     }
                 ]
@@ -154,4 +171,3 @@ public sealed class AdminSchemaService
         ]
     };
 }
-
