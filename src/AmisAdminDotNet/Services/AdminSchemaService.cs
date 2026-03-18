@@ -1,4 +1,5 @@
 using AmisAdminDotNet.AmisComponents;
+using CrudComponent = AmisAdminDotNet.AmisComponents.Crud;
 
 namespace AmisAdminDotNet.Services;
 
@@ -50,7 +51,7 @@ public sealed class AdminSchemaService
         };
     }
 
-    private static Crud BuildUserCrud() => new()
+    private static CrudComponent BuildUserCrud() => new()
     {
         Name = "userCrud",
         SyncLocation = false,

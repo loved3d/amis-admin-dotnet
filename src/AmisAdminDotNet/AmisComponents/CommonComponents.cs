@@ -161,6 +161,74 @@ public sealed class InputEmail : AmisNode
 }
 
 /// <summary>
+/// Amis <c>input-number</c> component — a numeric entry field.
+/// Maps to Python <c>class InputNumber(AmisNode)</c>.
+/// </summary>
+public sealed class InputNumber : AmisNode
+{
+    [JsonPropertyName("type")]
+    public override string Type => "input-number";
+
+    /// <summary>Field name bound to the form data object.</summary>
+    [JsonPropertyName("name")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Name { get; set; }
+
+    /// <summary>Field label displayed to the user.</summary>
+    [JsonPropertyName("label")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Label { get; set; }
+
+    /// <summary>Whether the field is required.</summary>
+    [JsonPropertyName("required")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Required { get; set; }
+
+    /// <summary>Minimum allowed value.</summary>
+    [JsonPropertyName("min")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? Min { get; set; }
+
+    /// <summary>Maximum allowed value.</summary>
+    [JsonPropertyName("max")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? Max { get; set; }
+}
+
+/// <summary>
+/// Amis <c>input-datetime</c> component — a combined date-and-time picker.
+/// Maps to Python <c>class InputDatetime(AmisNode)</c>.
+/// </summary>
+public sealed class InputDatetime : AmisNode
+{
+    [JsonPropertyName("type")]
+    public override string Type => "input-datetime";
+
+    /// <summary>Field name bound to the form data object.</summary>
+    [JsonPropertyName("name")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Name { get; set; }
+
+    /// <summary>Field label displayed to the user.</summary>
+    [JsonPropertyName("label")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Label { get; set; }
+
+    /// <summary>Whether the field is required.</summary>
+    [JsonPropertyName("required")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Required { get; set; }
+
+    /// <summary>
+    /// Display format string (e.g. <c>"YYYY-MM-DD HH:mm:ss"</c>).
+    /// Maps to Python <c>format: Optional[str]</c>.
+    /// </summary>
+    [JsonPropertyName("format")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Format { get; set; }
+}
+
+/// <summary>
 /// Amis <c>switch</c> component — a boolean toggle control.
 /// Maps to Python <c>class Switch(AmisNode)</c>.
 /// </summary>
