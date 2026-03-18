@@ -1,3 +1,4 @@
+using AmisAdminDotNet.Admin.Extensions;
 using AmisAdminDotNet.AmisComponents;
 using AmisAdminDotNet.Crud;
 using AmisAdminDotNet.Models;
@@ -368,7 +369,74 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
         return true;
     }
 
+    /// <summary>
+    /// Bulk-deletes entities by a list of ids.
+    /// Maps to Python <c>ModelAdmin.bulk_delete()</c>.
+    /// </summary>
+    public virtual int BulkDeleteItem(IEnumerable<TKey> ids)
+    {
+        int count = 0;
+        foreach (var id in ids)
+        {
+            if (DeleteItem(id))
+                count++;
+        }
+        return count;
+    }
+
+    /// <summary>Async version of <see cref="BulkDeleteItem"/>.</summary>
+    public virtual async Task<int> BulkDeleteItemAsync(IEnumerable<TKey> ids)
+    {
+        int count = 0;
+        foreach (var id in ids)
+        {
+            if (await DeleteItemAsync(id))
+                count++;
+        }
+        return count;
+    }
+
     // ── Schema helpers ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Row-level permission filters. Subclasses override to add data-scoping filters.
+    /// Applied automatically in the context-aware <see cref="ApplyFilter(IQueryable{TEntity}, CrudQueryParams, HttpContext)"/> overload.
+    /// Maps to Python <c>extensions/schemas.py SelectPerm</c>.
+    /// </summary>
+    protected virtual IEnumerable<SelectPerm<TEntity>> GetSelectPerms()
+        => [];
+
+    /// <summary>
+    /// Context-aware filter overload. Calls the base <see cref="ApplyFilter(IQueryable{TEntity}, CrudQueryParams)"/>
+    /// and then applies each <see cref="GetSelectPerms"/> entry.
+    /// </summary>
+    public virtual IQueryable<TEntity> ApplyFilter(IQueryable<TEntity> query, CrudQueryParams p, HttpContext ctx)
+    {
+        query = ApplyFilter(query, p);
+        foreach (var perm in GetSelectPerms())
+            query = perm.Apply(query, ctx);
+        return query;
+    }
+
+    /// <summary>
+    /// Returns the list of custom <see cref="AdminAction"/> instances registered for this admin.
+    /// Subclasses override to add custom action buttons to the page header toolbar.
+    /// Maps to Python <c>AdminAction</c> system.
+    /// </summary>
+    protected virtual IEnumerable<AdminAction> GetAdminActions() => [];
+
+    /// <summary>
+    /// Builds the bulk-delete button shown in the CRUD bulk-actions toolbar.
+    /// Maps to Python bulk delete action.
+    /// </summary>
+    public virtual Button GetBulkDeleteAction() => new()
+    {
+        Label       = "Delete Selected",
+        Level       = "danger",
+        ActionType  = "ajax",
+        ConfirmText = "Delete selected rows?",
+        Api         = $"delete:{RouterPrefix}/bulk"
+    };
 
     /// <summary>
     /// Returns the amis column definitions for the list table, derived from the
@@ -413,6 +481,21 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
         return fields;
     }
 
+    /// <summary>
+    /// Returns the amis form fields for the Create dialog.
+    /// Override in subclasses (e.g. <see cref="AutoTimeModelAdmin{TEntity,TKey,TDbContext}"/>)
+    /// to exclude auto-managed fields.
+    /// Default: delegates to <see cref="GetFormFields()"/>.
+    /// </summary>
+    protected virtual IReadOnlyList<object> GetCreateFormFields() => GetFormFields();
+
+    /// <summary>
+    /// Returns the amis form fields for the Update/Edit dialog.
+    /// Override in subclasses to exclude or add fields specific to updates.
+    /// Default: delegates to <see cref="GetFormFields()"/>.
+    /// </summary>
+    protected virtual IReadOnlyList<object> GetUpdateFormFields() => GetFormFields();
+
     private static string? GetFormFieldName(object field) => field switch
     {
         InputText f      => f.Name,
@@ -452,7 +535,7 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
                 Mode   = "horizontal",
                 Api    = $"post:{RouterPrefix}",
                 Reload = RouterPath + "Crud",
-                Body   = GetFormFields().ToList()
+                Body   = GetCreateFormFields().ToList()
             }
         }
     };
@@ -474,7 +557,7 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
                 Mode   = "horizontal",
                 Api    = $"put:{RouterPrefix}/${{id}}",
                 Reload = RouterPath + "Crud",
-                Body   = GetFormFields().ToList()
+                Body   = GetUpdateFormFields().ToList()
             }
         }
     };
@@ -513,6 +596,12 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
         if (EnableExportCsv)   footerToolbar.Add("export-csv");
         if (EnableExportExcel) footerToolbar.Add("export-excel");
 
+        // Header toolbar: Create button + custom admin action buttons + bulkActions marker
+        var headerToolbar = new List<object> { GetCreateAction() };
+        foreach (var action in GetAdminActions())
+            headerToolbar.Add(action.BuildActionButton(RouterPrefix));
+        headerToolbar.Add("bulkActions");
+
         return new Page
         {
             Title = Label,
@@ -522,8 +611,9 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
                 SyncLocation  = false,
                 Api           = $"get:{RouterPrefix}",
                 PerPage       = ListPerPage,
-                HeaderToolbar = [GetCreateAction(), "bulkActions"],
+                HeaderToolbar = headerToolbar,
                 FooterToolbar = footerToolbar,
+                BulkActions   = [GetBulkDeleteAction()],
                 Columns       = columns
             }
         };
@@ -547,7 +637,16 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
                 return Results.Json(AdminApiResponse.Fail("Unauthorized"), statusCode: 401);
 
             var queryParams = CrudQueryParams.FromQuery(ctx.Request.Query);
-            var result = await GetItemsAsync(queryParams);
+            var page    = Math.Max(queryParams.Page, 1);
+            var perPage = Math.Clamp(queryParams.PerPage, 1, 100);
+
+            IQueryable<TEntity> query = Db.Set<TEntity>().AsNoTracking();
+            query = ApplyFilter(query, queryParams, ctx);
+
+            var total   = await query.CountAsync();
+            var ordered = ApplyOrdering(query, queryParams);
+            var items   = await ordered.Skip((page - 1) * perPage).Take(perPage).ToListAsync();
+            var result  = new PagedResult<TEntity>(items, (int)total);
             return Results.Json(AdminApiResponse.Ok(new { items = result.Items, total = result.Total }));
         });
 
@@ -586,6 +685,47 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
                 ? Results.Json(AdminApiResponse.Ok(msg: $"{Label} deleted."))
                 : Results.Json(AdminApiResponse.Fail($"{Label} not found."));
         });
+
+        // Bulk delete: DELETE {prefix}/bulk?ids=1,2,3
+        app.MapDelete(prefix + "/bulk", async (HttpContext ctx) =>
+        {
+            if (!await HasDeletePermissionAsync(ctx))
+                return Results.Json(AdminApiResponse.Fail("Unauthorized"), statusCode: 401);
+
+            var idsParam = ctx.Request.Query["ids"].FirstOrDefault() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(idsParam))
+                return Results.Json(AdminApiResponse.Fail("No ids provided."));
+
+            var rawIds = idsParam
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            var ids = new List<TKey>();
+            foreach (var s in rawIds)
+            {
+                try
+                {
+                    var converted = Convert.ChangeType(s, typeof(TKey));
+                    if (converted is TKey key)
+                        ids.Add(key);
+                }
+                catch { /* skip unparseable ids */ }
+            }
+
+            var deleted = await BulkDeleteItemAsync(ids);
+            return Results.Json(AdminApiResponse.Ok(new { deleted }, $"{deleted} {Label}(s) deleted."));
+        });
+
+        // Custom admin action routes: POST {prefix}/actions/{actionName}
+        foreach (var action in GetAdminActions())
+        {
+            var capturedAction = action;
+            app.MapPost(prefix + "/actions/" + capturedAction.ActionName, async (HttpContext ctx) =>
+            {
+                if (!await HasPagePermissionAsync(ctx))
+                    return Results.Json(AdminApiResponse.Fail("Unauthorized"), statusCode: 401);
+                return Results.Json(await capturedAction.HandleAsync(ctx));
+            });
+        }
     }
 
     protected virtual bool TryValidateEntity(TEntity entity, out string? errorMessage)

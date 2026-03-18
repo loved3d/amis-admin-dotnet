@@ -30,4 +30,16 @@ public sealed class AdminSiteSettings
     /// Maps to Python <c>openapi_url</c> in FastAPI app settings.
     /// </summary>
     public bool EnableSwagger { get; set; } = false;
+
+    /// <summary>
+    /// Display title of the admin site shown in the UI.
+    /// Maps to Python <c>site_title: str</c>.
+    /// </summary>
+    public string SiteTitle { get; set; } = "Admin";
+
+    /// <summary>
+    /// Version string displayed in the admin UI.
+    /// Maps to Python <c>site_version: str</c>.
+    /// </summary>
+    public string Version { get; set; } = "1.0.0";
 }

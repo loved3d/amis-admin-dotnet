@@ -102,4 +102,13 @@ public sealed class TableColumn
     [JsonPropertyName("width")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? Width { get; set; }
+
+    /// <summary>
+    /// Quick-edit configuration. When set, the cell becomes editable inline.
+    /// Set to <c>new { type = "switch" }</c> for bool columns, or any other amis form component.
+    /// Maps to amis <c>quickEdit</c> property.
+    /// </summary>
+    [JsonPropertyName("quickEdit")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public object? QuickEdit { get; set; }
 }

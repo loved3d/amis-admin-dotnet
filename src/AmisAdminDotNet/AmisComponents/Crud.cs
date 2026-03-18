@@ -87,6 +87,14 @@ public sealed class Crud : AmisNode
     }
 
     /// <summary>
+    /// When <c>true</c> columns are collapsed into expandable rows on small screens.
+    /// Maps to amis <c>footable</c> property.
+    /// </summary>
+    [JsonPropertyName("footable")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Footable { get; set; }
+
+    /// <summary>
     /// Whether to allow CSV export from the CRUD toolbar.
     /// When <c>true</c>, <c>"export-csv"</c> is added to <see cref="FooterToolbar"/> automatically
     /// during schema generation.
