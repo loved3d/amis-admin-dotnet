@@ -172,8 +172,10 @@ public abstract class AutoTimeModelAdmin<TEntity, TKey, TDbContext>
         // The field Name is in camelCase (e.g. "createTime"); compare case-insensitively.
         // Also compare with PascalCase version so "CreateTime" matches "createTime".
         return excludeSet.Contains(name) ||
-               (name.Length > 0 && excludeSet.Contains(
-                   char.ToUpperInvariant(name[0]) + name[1..]));
+               (name.Length > 1 && excludeSet.Contains(
+                   char.ToUpperInvariant(name[0]) + name[1..])) ||
+               (name.Length == 1 && excludeSet.Contains(
+                   char.ToUpperInvariant(name[0]).ToString()));
     }
 }
 

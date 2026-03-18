@@ -54,6 +54,7 @@ public class FileAdmin : RouterAdmin
 
         app.MapPost(prefix + "/upload", async (IFormFile file, HttpContext ctx) =>
         {
+            // The multipart form-data field must be named "file" to bind to the IFormFile parameter.
             if (!HasPagePermission(ctx))
                 return Results.Json(AdminApiResponse.Fail("Unauthorized"), statusCode: 401);
 

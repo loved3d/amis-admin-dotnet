@@ -300,6 +300,25 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
     }
 
     /// <summary>
+    /// Context-aware async overload that applies row-level <see cref="GetSelectPerms"/> filters
+    /// in addition to the standard query parameters.
+    /// Used by <see cref="RegisterRoutes"/> GET handler.
+    /// </summary>
+    public virtual async Task<PagedResult<TEntity>> GetItemsAsync(CrudQueryParams p, HttpContext ctx)
+    {
+        var page    = Math.Max(p.Page, 1);
+        var perPage = Math.Clamp(p.PerPage, 1, 100);
+
+        IQueryable<TEntity> query = Db.Set<TEntity>().AsNoTracking();
+        query = ApplyFilter(query, p, ctx);
+
+        var total   = await query.CountAsync();
+        var ordered = ApplyOrdering(query, p);
+        var items   = await ordered.Skip((page - 1) * perPage).Take(perPage).ToListAsync();
+        return new PagedResult<TEntity>(items, total);
+    }
+
+    /// <summary>
     /// Persists a new entity. Maps to Python <c>SqlalchemyCrud.create()</c>.
     /// <c>POST {RouterPrefix}</c>
     /// </summary>
@@ -637,16 +656,7 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
                 return Results.Json(AdminApiResponse.Fail("Unauthorized"), statusCode: 401);
 
             var queryParams = CrudQueryParams.FromQuery(ctx.Request.Query);
-            var page    = Math.Max(queryParams.Page, 1);
-            var perPage = Math.Clamp(queryParams.PerPage, 1, 100);
-
-            IQueryable<TEntity> query = Db.Set<TEntity>().AsNoTracking();
-            query = ApplyFilter(query, queryParams, ctx);
-
-            var total   = await query.CountAsync();
-            var ordered = ApplyOrdering(query, queryParams);
-            var items   = await ordered.Skip((page - 1) * perPage).Take(perPage).ToListAsync();
-            var result  = new PagedResult<TEntity>(items, (int)total);
+            var result = await GetItemsAsync(queryParams, ctx);
             return Results.Json(AdminApiResponse.Ok(new { items = result.Items, total = result.Total }));
         });
 

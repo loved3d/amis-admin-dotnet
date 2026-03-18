@@ -172,11 +172,13 @@ public static class TableModelParser
 
         if (underlying.IsEnum)
         {
+            // GroupBy to handle enum members sharing the same numeric value (e.g. aliases)
             return Enum.GetValues(underlying)
                 .Cast<object>()
+                .GroupBy(v => Convert.ToInt32(v))
                 .ToDictionary(
-                    v => Convert.ToInt32(v).ToString(),
-                    v => v.ToString() ?? string.Empty);
+                    g => g.Key.ToString(),
+                    g => g.First().ToString() ?? string.Empty);
         }
 
         // bool mapping
