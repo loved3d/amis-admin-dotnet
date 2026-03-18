@@ -6,8 +6,12 @@ public static class AdminHostPage
 
     public static string RenderHtml(AppSettings settings)
     {
-        var amisCdn = settings.AmisCdn.TrimEnd('/');
-        var schemaApiPath = settings.SchemaApiPath;
+        var amisCdn = string.IsNullOrWhiteSpace(settings.AmisCdn)
+            ? new AppSettings().AmisCdn
+            : settings.AmisCdn.TrimEnd('/');
+        var schemaApiPath = string.IsNullOrWhiteSpace(settings.SchemaApiPath)
+            ? "/api/admin/schema"
+            : settings.SchemaApiPath;
 
         return $$"""
 <!doctype html>
@@ -19,16 +23,7 @@ public static class AdminHostPage
   <link rel="stylesheet" href="{{amisCdn}}/sdk.css" />
   <link rel="stylesheet" href="{{amisCdn}}/helper.css" />
   <link rel="stylesheet" href="{{amisCdn}}/iconfont.css" />
-  <style>
-    html, body, #root { height: 100%; margin: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f7fa; }
-    .fallback { max-width: 1100px; margin: 24px auto; background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 8px 24px rgba(31, 35, 41, 0.08); }
-    .fallback h1 { margin-top: 0; }
-    .fallback .notice { background: #fff7e6; color: #ad6800; border: 1px solid #ffd591; padding: 12px 16px; border-radius: 8px; }
-    .fallback table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-    .fallback th, .fallback td { padding: 10px 12px; border-bottom: 1px solid #e5e6eb; text-align: left; }
-    .fallback pre { background: #0b1020; color: #d7e3ff; padding: 16px; border-radius: 8px; overflow: auto; }
-  </style>
+  <link rel="stylesheet" href="/admin/site.css" />
 </head>
 <body>
   <div id="root"></div>

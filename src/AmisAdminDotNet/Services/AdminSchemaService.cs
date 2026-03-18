@@ -9,17 +9,24 @@ namespace AmisAdminDotNet.Services;
 /// component classes rather than anonymous objects, mirroring how
 /// fastapi-amis-admin assembles its page schema from Python dataclasses.
 /// </summary>
-public sealed class AdminSchemaService
+public sealed class AdminSchemaService : IDisposable
 {
     private const string PageCacheKey = "admin-schema:page";
     private const string JsonCacheKey = "admin-schema:json";
+    // The admin schema is effectively static during the lifetime of the sample app, so
+    // a moderate TTL avoids repeated JSON generation while still allowing config changes
+    // to show up without a restart in longer-lived hosts.
+    private static readonly TimeSpan SchemaCacheLifetime = TimeSpan.FromMinutes(30);
     private readonly IMemoryCache _cache;
     private readonly II18nService _i18n;
+    private readonly bool _ownsCache;
+    private bool _disposed;
 
     public AdminSchemaService(II18nService? i18n = null, IMemoryCache? cache = null)
     {
         _i18n = i18n ?? new I18nService();
         _cache = cache ?? new MemoryCache(new MemoryCacheOptions());
+        _ownsCache = cache is null;
     }
 
     /// <summary>
@@ -29,44 +36,70 @@ public sealed class AdminSchemaService
     /// </summary>
     public Page BuildAdminPageSchema()
     {
-        return _cache.GetOrCreate(PageCacheKey, _ => new Page
+        return _cache.GetOrCreate(PageCacheKey, entry =>
         {
-            Title = _i18n.Translate("admin.title", "Amis Admin .NET Core"),
-            SubTitle = _i18n.Translate(
-                "admin.subtitle",
-                "Backend-generated amis JSON with a minimal .NET admin integration."),
-            Body = new Tabs
+            entry.AbsoluteExpirationRelativeToNow = SchemaCacheLifetime;
+
+            return new Page
             {
-                TabList =
-                [
-                    new Tab
-                    {
-                        Title = _i18n.Translate("tabs.dashboard", "Dashboard"),
-                        Body = new object[]
+                Title = _i18n.Translate("admin.title", "Amis Admin .NET Core"),
+                SubTitle = _i18n.Translate(
+                    "admin.subtitle",
+                    "Backend-generated amis JSON with a minimal .NET admin integration."),
+                Body = new Tabs
+                {
+                    TabList =
+                    [
+                        new Tab
                         {
-                            new Tpl
+                            Title = _i18n.Translate("tabs.dashboard", "Dashboard"),
+                            Body = new object[]
                             {
-                                Template = "<div class='text-xl'>Welcome to Amis Admin .NET Core</div><p>This sample mirrors the core fastapi-amis-admin pattern: the backend generates amis schema and CRUD APIs.</p>"
-                            },
-                            new Alert
-                            {
-                                Level = "info",
-                                Body = "This repository started almost empty, so this implementation provides a minimal runnable .NET Core migration skeleton."
+                                new Tpl
+                                {
+                                    Template = "<div class='text-xl'>Welcome to Amis Admin .NET Core</div><p>This sample mirrors the core fastapi-amis-admin pattern: the backend generates amis schema and CRUD APIs.</p>"
+                                },
+                                new Alert
+                                {
+                                    Level = "info",
+                                    Body = "This repository started almost empty, so this implementation provides a minimal runnable .NET Core migration skeleton."
+                                }
                             }
+                        },
+                        new Tab
+                        {
+                            Title = _i18n.Translate("tabs.users", "Users"),
+                            Body = new object[] { BuildUserCrud() }
                         }
-                    },
-                    new Tab
-                    {
-                        Title = _i18n.Translate("tabs.users", "Users"),
-                        Body = new object[] { BuildUserCrud() }
-                    }
-                ]
-            }
+                    ]
+                }
+            };
         })!;
     }
 
     public string BuildAdminPageJson() =>
-        _cache.GetOrCreate(JsonCacheKey, _ => BuildAdminPageSchema().ToJson())!;
+        _cache.GetOrCreate(JsonCacheKey, entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = SchemaCacheLifetime;
+            return BuildAdminPageSchema().ToJson();
+        })!;
+
+    public void Dispose()
+    {
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+
+    private void Dispose(bool disposing)
+    {
+        if (_disposed || !disposing)
+            return;
+
+        if (_ownsCache)
+            _cache.Dispose();
+
+        _disposed = true;
+    }
 
     private CrudComponent BuildUserCrud() => new()
     {

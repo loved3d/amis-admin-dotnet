@@ -48,7 +48,7 @@ public abstract class CrudController<TEntity, TKey, TDbContext>
         page = Math.Max(page, 1);
         perPage = Math.Clamp(perPage, 1, 100);
 
-        var set = Db.Set<TEntity>().AsNoTracking();
+        var set = Db.Set<TEntity>();
         var total = set.Count();
         var items = set
             .Skip((page - 1) * perPage)

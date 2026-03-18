@@ -57,7 +57,7 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
         page    = Math.Max(page, 1);
         perPage = Math.Clamp(perPage, 1, 100);
 
-        var set   = Db.Set<TEntity>().AsNoTracking();
+        var set   = Db.Set<TEntity>();
         var total = set.Count();
         var items = set.Skip((page - 1) * perPage).Take(perPage).ToList();
         return new PagedResult<TEntity>(items, total);
@@ -99,7 +99,8 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
     public virtual TEntity? UpdateItem(TKey id, TEntity entity)
     {
         var existing = Db.Set<TEntity>().Find(id);
-        if (existing is null) return null;
+        if (existing is null)
+            return null;
 
         Db.Entry(existing).CurrentValues.SetValues(entity);
         Db.SaveChanges();
@@ -109,7 +110,8 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
     public virtual async Task<TEntity?> UpdateItemAsync(TKey id, TEntity entity)
     {
         var existing = await Db.Set<TEntity>().FindAsync(new object?[] { id });
-        if (existing is null) return null;
+        if (existing is null)
+            return null;
 
         Db.Entry(existing).CurrentValues.SetValues(entity);
         await Db.SaveChangesAsync();
@@ -123,7 +125,8 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
     public virtual bool DeleteItem(TKey id)
     {
         var existing = Db.Set<TEntity>().Find(id);
-        if (existing is null) return false;
+        if (existing is null)
+            return false;
 
         Db.Set<TEntity>().Remove(existing);
         Db.SaveChanges();
@@ -133,7 +136,8 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
     public virtual async Task<bool> DeleteItemAsync(TKey id)
     {
         var existing = await Db.Set<TEntity>().FindAsync(new object?[] { id });
-        if (existing is null) return false;
+        if (existing is null)
+            return false;
 
         Db.Set<TEntity>().Remove(existing);
         await Db.SaveChangesAsync();
@@ -262,8 +266,8 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
 
         app.MapPost(prefix, async (TEntity entity) =>
         {
-            if (!DataAnnotationsModelValidator.TryValidate(entity, out var errors))
-                return Results.Json(AdminApiResponse.Fail(FormatValidationError(errors)));
+            if (!TryValidateEntity(entity, out var errorMessage))
+                return Results.Json(AdminApiResponse.Fail(errorMessage!));
 
             var created = await CreateItemAsync(entity);
             return Results.Json(AdminApiResponse.Ok(new { item = created }, $"{Label} created."));
@@ -271,8 +275,8 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
 
         app.MapPut(prefix + "/{id}", async (TKey id, TEntity entity) =>
         {
-            if (!DataAnnotationsModelValidator.TryValidate(entity, out var errors))
-                return Results.Json(AdminApiResponse.Fail(FormatValidationError(errors)));
+            if (!TryValidateEntity(entity, out var errorMessage))
+                return Results.Json(AdminApiResponse.Fail(errorMessage!));
 
             var updated = await UpdateItemAsync(id, entity);
             return updated is null
@@ -288,6 +292,15 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
         });
     }
 
-    private static string FormatValidationError(IReadOnlyDictionary<string, string[]> errors) =>
-        string.Join("; ", errors.SelectMany(entry => entry.Value.Select(message => $"{entry.Key}: {message}")));
+    protected virtual bool TryValidateEntity(TEntity entity, out string? errorMessage)
+    {
+        if (DataAnnotationsModelValidator.TryValidate(entity, out var errors))
+        {
+            errorMessage = null;
+            return true;
+        }
+
+        errorMessage = DataAnnotationsModelValidator.FormatErrors(errors);
+        return false;
+    }
 }

@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using AmisAdminDotNet.Admin;
 using AmisAdminDotNet.AmisComponents;
@@ -34,6 +35,32 @@ public sealed class ProductAdmin : ModelAdmin<ProductEntity, int, ProductDbConte
     public override string Label      => "Products";
 
     public ProductAdmin(ProductDbContext db) : base(db) { }
+}
+
+public sealed class ValidatedProductEntity
+{
+    public int Id { get; set; }
+
+    [Required]
+    public string? Title { get; set; }
+}
+
+public sealed class ValidatedProductDbContext : DbContext
+{
+    public DbSet<ValidatedProductEntity> Products => Set<ValidatedProductEntity>();
+
+    public ValidatedProductDbContext(DbContextOptions<ValidatedProductDbContext> options) : base(options) { }
+}
+
+public sealed class ValidatedProductAdmin : ModelAdmin<ValidatedProductEntity, int, ValidatedProductDbContext>
+{
+    public override string RouterPath => "validated-products";
+    public override string Label => "Validated products";
+
+    public ValidatedProductAdmin(ValidatedProductDbContext db) : base(db) { }
+
+    public bool ValidateForTest(ValidatedProductEntity entity, out string? errorMessage) =>
+        TryValidateEntity(entity, out errorMessage);
 }
 
 // ── ModelAdmin tests ──────────────────────────────────────────────────────────
@@ -163,6 +190,21 @@ public sealed class ModelAdminTests
 
         Assert.Equal(1, result.Total);
         Assert.Equal("Widget", result.Items[0].Title);
+    }
+
+    [Fact]
+    public void TryValidateEntity_ReturnsErrorMessage_ForInvalidAnnotatedEntity()
+    {
+        var opts = new DbContextOptionsBuilder<ValidatedProductDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        using var db = new ValidatedProductDbContext(opts);
+        var admin = new ValidatedProductAdmin(db);
+
+        var isValid = admin.ValidateForTest(new ValidatedProductEntity { Id = 1 }, out var errorMessage);
+
+        Assert.False(isValid);
+        Assert.Contains("Title", errorMessage);
     }
 }
 

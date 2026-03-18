@@ -81,7 +81,7 @@ public sealed class MigrationUtilityTests
     private sealed class AnnotatedModel
     {
         [Required]
-        public string Name { get; set; } = string.Empty;
+        public string? Name { get; set; }
 
         [EmailAddress]
         public string Email { get; set; } = "not-an-email";

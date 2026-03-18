@@ -44,4 +44,7 @@ public static class DataAnnotationsModelValidator
 
         return false;
     }
+
+    public static string FormatErrors(IReadOnlyDictionary<string, string[]> errors) =>
+        string.Join("; ", errors.SelectMany(entry => entry.Value.Select(message => $"{entry.Key}: {message}")));
 }

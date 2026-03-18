@@ -20,7 +20,7 @@ public sealed class I18nService : II18nService
 
     public I18nService(IReadOnlyDictionary<string, string> translations)
     {
-        _translations = translations;
+        _translations = new Dictionary<string, string>(translations, StringComparer.OrdinalIgnoreCase);
     }
 
     public string Translate(string key, string? defaultValue = null) =>

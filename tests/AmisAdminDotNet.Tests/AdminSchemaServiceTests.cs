@@ -8,7 +8,7 @@ public sealed class AdminSchemaServiceTests
     [Fact]
     public void BuildAdminPageSchema_ContainsCrudAndMutationApis()
     {
-        var service = new AdminSchemaService();
+        using var service = new AdminSchemaService();
 
         var json = JsonSerializer.Serialize(service.BuildAdminPageSchema());
 
@@ -23,7 +23,7 @@ public sealed class AdminSchemaServiceTests
     [Fact]
     public void BuildAdminPageSchema_IsCached()
     {
-        var service = new AdminSchemaService();
+        using var service = new AdminSchemaService();
 
         var first = service.BuildAdminPageSchema();
         var second = service.BuildAdminPageSchema();

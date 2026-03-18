@@ -37,16 +37,36 @@ public sealed class AppSettings
 
     public static AppSettings FromConfiguration(IConfiguration configuration)
     {
-        var settings = configuration.GetSection("AppSettings").Get<AppSettings>() ?? new AppSettings();
+        var appSettingsSection = configuration.GetSection("AppSettings");
+        var settings = appSettingsSection.Get<AppSettings>() ?? new AppSettings();
         var legacySettings = configuration.GetSection("AdminSite").Get<AdminSiteSettings>();
 
         if (legacySettings is null)
             return settings;
 
-        settings.DatabaseUrl = legacySettings.DatabaseUrl;
-        settings.AdminPath = legacySettings.AdminPath;
-        settings.CorsOrigins = legacySettings.CorsOrigins;
-        settings.EnableSwagger = legacySettings.EnableSwagger;
+        static bool HasConfiguredValue(IConfigurationSection section, string key) =>
+            section[key] is not null || section.GetSection(key).GetChildren().Any();
+
+        var configuredValues = new Dictionary<string, bool>(StringComparer.Ordinal)
+        {
+            [nameof(DatabaseUrl)] = HasConfiguredValue(appSettingsSection, nameof(DatabaseUrl)),
+            [nameof(AdminPath)] = HasConfiguredValue(appSettingsSection, nameof(AdminPath)),
+            [nameof(CorsOrigins)] = HasConfiguredValue(appSettingsSection, nameof(CorsOrigins)),
+            [nameof(EnableSwagger)] = HasConfiguredValue(appSettingsSection, nameof(EnableSwagger))
+        };
+
+        if (!configuredValues[nameof(DatabaseUrl)])
+            settings.DatabaseUrl = legacySettings.DatabaseUrl;
+
+        if (!configuredValues[nameof(AdminPath)])
+            settings.AdminPath = legacySettings.AdminPath;
+
+        if (!configuredValues[nameof(CorsOrigins)])
+            settings.CorsOrigins = legacySettings.CorsOrigins;
+
+        if (!configuredValues[nameof(EnableSwagger)])
+            settings.EnableSwagger = legacySettings.EnableSwagger;
+
         return settings;
     }
 }
