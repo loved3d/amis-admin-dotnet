@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AmisAdminDotNet.AmisComponents;
+using CrudComponent = AmisAdminDotNet.AmisComponents.Crud;
 
 namespace AmisAdminDotNet.Tests;
 
@@ -65,14 +66,14 @@ public sealed class AmisComponentsTests
     [Fact]
     public void Crud_Type_IsCrud()
     {
-        var crud = new Crud();
+        var crud = new CrudComponent();
         Assert.Equal("crud", crud.Type);
     }
 
     [Fact]
     public void Crud_Serializes_CoreProperties()
     {
-        var crud = new Crud
+        var crud = new CrudComponent
         {
             Name = "myCrud",
             Api = "get:/api/items",
@@ -92,9 +93,9 @@ public sealed class AmisComponentsTests
     [Fact]
     public void Crud_Messages_SerializesNestedClass()
     {
-        var crud = new Crud
+        var crud = new CrudComponent
         {
-            Messages = new Crud.CrudMessages { FetchFailed = "Load error", SaveSuccess = "Saved!" }
+            Messages = new CrudComponent.CrudMessages { FetchFailed = "Load error", SaveSuccess = "Saved!" }
         };
 
         var json = JsonSerializer.Serialize(crud, AmisJsonOptions.Default);
