@@ -1,6 +1,7 @@
 using AmisAdminDotNet.AmisComponents;
 using AmisAdminDotNet.Crud;
 using AmisAdminDotNet.Services;
+using Microsoft.AspNetCore.Http;
 
 namespace AmisAdminDotNet.Admin;
 
@@ -36,8 +37,20 @@ public abstract class BaseAdmin
     /// Override to add custom authorization logic.
     /// Maps to Python <c>BaseAdmin.has_page_permission()</c>.
     /// </summary>
-    /// <returns><c>true</c> by default (open to all authenticated users).</returns>
-    public virtual bool HasPagePermission() => true;
+    /// <param name="context">The current HTTP context.</param>
+    /// <returns><c>true</c> by default (open to all users — backward-compatible).</returns>
+    public virtual bool HasPagePermission(HttpContext context) => true;
+
+    /// <summary>
+    /// Helper that returns <c>true</c> when the requesting user is authenticated.
+    /// Use this inside a <see cref="HasPagePermission"/> override to require login:
+    /// <code>
+    /// public override bool HasPagePermission(HttpContext context) =>
+    ///     RequireAuthenticatedUser(context);
+    /// </code>
+    /// </summary>
+    protected bool RequireAuthenticatedUser(HttpContext context) =>
+        context.User?.Identity?.IsAuthenticated == true;
 }
 
 /// <summary>
@@ -60,10 +73,18 @@ public abstract class RouterAdmin : BaseAdmin, IRouterMixin
     public abstract void RegisterRoutes(WebApplication app);
 
     /// <summary>
-    /// Returns a tab label used by <see cref="AdminApp.BuildPageSchema"/>.
+    /// Returns a tab label used by <see cref="AdminApp.BuildTabsSchema"/>.
     /// Defaults to <see cref="BaseAdmin.RouterPath"/> when not overridden.
     /// </summary>
     public virtual string Label => RouterPath;
+
+    /// <summary>
+    /// Navigation metadata used when this admin is rendered as a tab.
+    /// Defaults to a <see cref="PageSchemaOptions"/> whose <c>Label</c> is this admin's
+    /// <see cref="Label"/>. Override to set <c>Icon</c>, <c>Sort</c>, or
+    /// <c>IsDefaultPage</c>.
+    /// </summary>
+    public virtual PageSchemaOptions PageSchema => new() { Label = Label };
 
     /// <summary>
     /// Returns the amis <see cref="Page"/> schema for this admin's page body.

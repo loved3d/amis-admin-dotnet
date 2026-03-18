@@ -80,14 +80,21 @@ public class AdminApp
 
     /// <summary>
     /// Builds an amis <see cref="Tabs"/> node containing one tab per registered admin.
-    /// Each tab body is produced by the admin's own <c>BuildPageSchema()</c>.
+    /// Tabs are ordered by <see cref="PageSchemaOptions.Sort"/> (descending); admins
+    /// with <see cref="PageSchemaOptions.IsDefaultPage"/> set to <c>true</c> are always
+    /// placed first. Each tab body is produced by the admin's own <c>BuildPageSchema()</c>.
     /// </summary>
     public Tabs BuildTabsSchema()
     {
+        var sorted = _admins
+            .OrderByDescending(a => a.PageSchema.IsDefaultPage)
+            .ThenByDescending(a => a.PageSchema.Sort)
+            .ToList();
+
         return new Tabs
         {
-            TabList = _admins
-                .Select(a => new Tab { Title = a.Label, Body = a.BuildPageSchema() })
+            TabList = sorted
+                .Select(a => new Tab { Title = a.PageSchema.Label, Body = a.BuildPageSchema() })
                 .ToList()
         };
     }

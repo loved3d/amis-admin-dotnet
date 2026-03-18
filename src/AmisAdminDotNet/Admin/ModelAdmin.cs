@@ -2,7 +2,10 @@ using AmisAdminDotNet.AmisComponents;
 using AmisAdminDotNet.Crud;
 using AmisAdminDotNet.Models;
 using AmisAdminDotNet.Services;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
+using System.Reflection;
 using CrudComponent = AmisAdminDotNet.AmisComponents.Crud;
 
 namespace AmisAdminDotNet.Admin;
@@ -46,6 +49,32 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
         Db = db;
     }
 
+    // ── Permission hooks ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Checks whether the context may perform READ (list/get) operations on this model.
+    /// Defaults to <see cref="BaseAdmin.HasPagePermission"/>.
+    /// </summary>
+    public virtual bool HasReadPermission(HttpContext context) => HasPagePermission(context);
+
+    /// <summary>
+    /// Checks whether the context may perform CREATE operations on this model.
+    /// Defaults to <see cref="BaseAdmin.HasPagePermission"/>.
+    /// </summary>
+    public virtual bool HasCreatePermission(HttpContext context) => HasPagePermission(context);
+
+    /// <summary>
+    /// Checks whether the context may perform UPDATE operations on this model.
+    /// Defaults to <see cref="BaseAdmin.HasPagePermission"/>.
+    /// </summary>
+    public virtual bool HasUpdatePermission(HttpContext context) => HasPagePermission(context);
+
+    /// <summary>
+    /// Checks whether the context may perform DELETE operations on this model.
+    /// Defaults to <see cref="BaseAdmin.HasPagePermission"/>.
+    /// </summary>
+    public virtual bool HasDeletePermission(HttpContext context) => HasPagePermission(context);
+
     // ── CRUD — mirrors CrudController<TEntity, TKey, TDbContext> API ──────────
 
     /// <summary>
@@ -71,6 +100,83 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
         var set = Db.Set<TEntity>().AsNoTracking();
         var total = await set.CountAsync();
         var items = await set.Skip((page - 1) * perPage).Take(perPage).ToListAsync();
+        return new PagedResult<TEntity>(items, total);
+    }
+
+    // ── Filter / ordering helpers ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Applies additional filtering to <paramref name="query"/> based on
+    /// <paramref name="p"/>. The base implementation is a no-op; override to
+    /// add search-field filtering, extra WHERE clauses, etc.
+    /// Maps to Python <c>SqlalchemyCrud.get_select()</c> filter composition.
+    /// </summary>
+    public virtual IQueryable<TEntity> ApplyFilter(IQueryable<TEntity> query, CrudQueryParams p)
+        => query;
+
+    /// <summary>
+    /// Applies ORDER BY to <paramref name="query"/> using <see cref="CrudQueryParams.OrderBy"/>
+    /// and <see cref="CrudQueryParams.OrderDir"/>. Property lookup is case-insensitive.
+    /// Returns the query unchanged when <see cref="CrudQueryParams.OrderBy"/> is null or
+    /// refers to a non-existent property.
+    /// </summary>
+    public virtual IQueryable<TEntity> ApplyOrdering(IQueryable<TEntity> query, CrudQueryParams p)
+    {
+        if (string.IsNullOrEmpty(p.OrderBy))
+            return query;
+
+        var prop = typeof(TEntity).GetProperty(
+            p.OrderBy,
+            BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+        if (prop is null)
+            return query;
+
+        var param      = Expression.Parameter(typeof(TEntity), "x");
+        var member     = Expression.Property(param, prop);
+        var keySelector = Expression.Lambda(member, param);
+
+        var methodName = string.Equals(p.OrderDir, "desc", StringComparison.OrdinalIgnoreCase)
+            ? "OrderByDescending"
+            : "OrderBy";
+
+        var method = typeof(Queryable)
+            .GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .First(m => m.Name == methodName && m.GetParameters().Length == 2)
+            .MakeGenericMethod(typeof(TEntity), prop.PropertyType);
+
+        return (IQueryable<TEntity>)method.Invoke(null, [query, keySelector])!;
+    }
+
+    /// <summary>
+    /// Returns a paged list using the richer <see cref="CrudQueryParams"/> (filter + ordering).
+    /// <c>GET {RouterPrefix}</c>
+    /// </summary>
+    public virtual PagedResult<TEntity> GetItems(CrudQueryParams p)
+    {
+        var page    = Math.Max(p.Page, 1);
+        var perPage = Math.Clamp(p.PerPage, 1, 100);
+
+        IQueryable<TEntity> query = Db.Set<TEntity>();
+        query = ApplyFilter(query, p);
+
+        var total   = query.Count();
+        var ordered = ApplyOrdering(query, p);
+        var items   = ordered.Skip((page - 1) * perPage).Take(perPage).ToList();
+        return new PagedResult<TEntity>(items, total);
+    }
+
+    /// <summary>Async version of <see cref="GetItems(CrudQueryParams)"/>.</summary>
+    public virtual async Task<PagedResult<TEntity>> GetItemsAsync(CrudQueryParams p)
+    {
+        var page    = Math.Max(p.Page, 1);
+        var perPage = Math.Clamp(p.PerPage, 1, 100);
+
+        IQueryable<TEntity> query = Db.Set<TEntity>().AsNoTracking();
+        query = ApplyFilter(query, p);
+
+        var total   = await query.CountAsync();
+        var ordered = ApplyOrdering(query, p);
+        var items   = await ordered.Skip((page - 1) * perPage).Take(perPage).ToListAsync();
         return new PagedResult<TEntity>(items, total);
     }
 
@@ -251,21 +357,29 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
 
     /// <summary>
     /// Registers the four standard CRUD endpoints on the given
-    /// <see cref="WebApplication"/>. Mirrors Python's
-    /// <c>@router.add_api_route</c> decorators.
+    /// <see cref="WebApplication"/>. Each endpoint checks the corresponding
+    /// permission hook before executing; a denied request returns HTTP 401.
+    /// Mirrors Python's <c>@router.add_api_route</c> decorators.
     /// </summary>
     public override void RegisterRoutes(WebApplication app)
     {
         var prefix = RouterPrefix;
 
-        app.MapGet(prefix, async (int page, int perPage) =>
+        app.MapGet(prefix, async (HttpContext ctx) =>
         {
-            var result = await GetItemsAsync(page, perPage);
+            if (!HasReadPermission(ctx))
+                return Results.Json(AdminApiResponse.Fail("Unauthorized"), statusCode: 401);
+
+            var queryParams = CrudQueryParams.FromQuery(ctx.Request.Query);
+            var result = await GetItemsAsync(queryParams);
             return Results.Json(AdminApiResponse.Ok(new { items = result.Items, total = result.Total }));
         });
 
-        app.MapPost(prefix, async (TEntity entity) =>
+        app.MapPost(prefix, async (TEntity entity, HttpContext ctx) =>
         {
+            if (!HasCreatePermission(ctx))
+                return Results.Json(AdminApiResponse.Fail("Unauthorized"), statusCode: 401);
+
             if (!TryValidateEntity(entity, out var errorMessage))
                 return Results.Json(AdminApiResponse.Fail(errorMessage!));
 
@@ -273,8 +387,11 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
             return Results.Json(AdminApiResponse.Ok(new { item = created }, $"{Label} created."));
         });
 
-        app.MapPut(prefix + "/{id}", async (TKey id, TEntity entity) =>
+        app.MapPut(prefix + "/{id}", async (TKey id, TEntity entity, HttpContext ctx) =>
         {
+            if (!HasUpdatePermission(ctx))
+                return Results.Json(AdminApiResponse.Fail("Unauthorized"), statusCode: 401);
+
             if (!TryValidateEntity(entity, out var errorMessage))
                 return Results.Json(AdminApiResponse.Fail(errorMessage!));
 
@@ -284,8 +401,11 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
                 : Results.Json(AdminApiResponse.Ok(new { item = updated }, $"{Label} updated."));
         });
 
-        app.MapDelete(prefix + "/{id}", async (TKey id) =>
+        app.MapDelete(prefix + "/{id}", async (TKey id, HttpContext ctx) =>
         {
+            if (!HasDeletePermission(ctx))
+                return Results.Json(AdminApiResponse.Fail("Unauthorized"), statusCode: 401);
+
             return await DeleteItemAsync(id)
                 ? Results.Json(AdminApiResponse.Ok(msg: $"{Label} deleted."))
                 : Results.Json(AdminApiResponse.Fail($"{Label} not found."));
