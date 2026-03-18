@@ -1,8 +1,11 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using AmisAdminDotNet.Admin;
 using AmisAdminDotNet.AmisComponents;
+using AmisAdminDotNet.Demo;
 using AmisAdminDotNet.Models;
 using AmisAdminDotNet.Services;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -50,6 +53,21 @@ if (adminSettings.CorsOrigins.Length > 0)
 // ─── Application services ──────────────────────────────────────────────────
 builder.Services.AddSingleton<IUserStore, InMemoryUserStore>();
 builder.Services.AddSingleton<AdminSchemaService>();
+
+// ─── AdminSite demo: DI registration ─────────────────────────────────────
+// NOTE: DemoDbContext is registered as a singleton instance intentionally.
+// AdminApp.RegisterAdmin<T>() resolves admin instances from the root
+// IServiceProvider (once at startup), which cannot resolve scoped services.
+// Using a singleton DbContext is safe here because the in-memory EF Core
+// provider is single-threaded by nature and this is a demo; in a production
+// app you would use IServiceScopeFactory inside RegisterAdmin to create a
+// per-request scope, or switch to a different admin resolution strategy.
+var demoDbOptions = new DbContextOptionsBuilder<DemoDbContext>()
+    .UseInMemoryDatabase("demo-admin")
+    .Options;
+builder.Services.AddSingleton(new DemoDbContext(demoDbOptions));
+builder.Services.AddTransient<DemoAdmin>(sp =>
+    new DemoAdmin(sp.GetRequiredService<DemoDbContext>()));
 
 var app = builder.Build();
 
@@ -101,6 +119,24 @@ app.MapDelete("/api/admin/users/{id:int}", (int id, IUserStore userStore) =>
         ? Results.Json(AdminApiResponse.Ok(msg: "User deleted."))
         : Results.Json(AdminApiResponse.Fail($"User {id} was not found."));
 });
+
+// ─── AdminSite demo: demonstrates the full ModelAdmin framework ─────────────
+// Build an AdminSite, register the DemoAdmin (which maps DemoItem to amis schema
+// and CRUD routes automatically), then mount it.  This wires up:
+//   GET  /api/demo/schema             — amis Page schema for the demo admin
+//   GET  /admin/demo-items            — paged list
+//   POST /admin/demo-items            — create
+//   PUT  /admin/demo-items/{id}       — update
+//   DELETE /admin/demo-items/{id}     — delete
+var demoSite = new AdminSite(adminSettings, app.Services);
+var demoApp  = demoSite.CreateApp("Demo");
+demoApp.RegisterAdmin<DemoAdmin>();
+demoApp.Mount(app);
+
+app.MapGet("/api/demo/schema", () =>
+    Results.Text(
+        JsonSerializer.Serialize(demoSite.BuildPageSchema(), AmisJsonOptions.Default),
+        "application/json; charset=utf-8"));
 
 app.Run();
 

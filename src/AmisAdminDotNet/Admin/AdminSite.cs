@@ -89,7 +89,7 @@ public class AdminSite
 
         return new Page
         {
-            Title = Settings.AdminPath.TrimStart('/').ToUpperInvariant() + " Admin",
+            Title = "Admin",
             Body  = tabs
         };
     }
