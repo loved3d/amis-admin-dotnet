@@ -77,6 +77,23 @@ public sealed class CrudControllerTests
     }
 
     [Fact]
+    public async Task GetItemsAsync_ReturnsPagedResult()
+    {
+        await using var db = CreateContext();
+        db.Samples.AddRange(
+            new SampleEntity { Id = 1, Name = "Alpha" },
+            new SampleEntity { Id = 2, Name = "Beta" },
+            new SampleEntity { Id = 3, Name = "Gamma" });
+        await db.SaveChangesAsync();
+
+        var ctrl = new SampleCrudController(db);
+        var result = await ctrl.GetItemsAsync(page: 1, perPage: 2);
+
+        Assert.Equal(3, result.Total);
+        Assert.Equal(2, result.Items.Count);
+    }
+
+    [Fact]
     public void CreateItem_PersistsEntityAndReturnsIt()
     {
         using var db = CreateContext();
@@ -136,6 +153,20 @@ public sealed class CrudControllerTests
         var ctrl = new SampleCrudController(db);
 
         Assert.False(ctrl.DeleteItem(42));
+    }
+
+    [Fact]
+    public async Task DeleteItemAsync_ExistingId_RemovesAndReturnsTrue()
+    {
+        await using var db = CreateContext();
+        db.Samples.Add(new SampleEntity { Id = 1, Name = "ToDelete" });
+        await db.SaveChangesAsync();
+
+        var ctrl = new SampleCrudController(db);
+        var deleted = await ctrl.DeleteItemAsync(1);
+
+        Assert.True(deleted);
+        Assert.Equal(0, db.Samples.Count());
     }
 }
 

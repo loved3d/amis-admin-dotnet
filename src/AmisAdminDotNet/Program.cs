@@ -15,12 +15,28 @@ builder.Services.ConfigureHttpJsonOptions(opts =>
     opts.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
 });
 
-// ─── CORS ──────────────────────────────────────────────────────────────────
-var adminSettings = builder.Configuration
-    .GetSection("AdminSite")
-    .Get<AdminSiteSettings>() ?? new AdminSiteSettings();
+// ─── CORS / app settings ───────────────────────────────────────────────────
+var appSettings = AppSettings.FromConfiguration(builder.Configuration);
+var adminSettings = appSettings.ToAdminSiteSettings();
 
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton(appSettings);
 builder.Services.AddSingleton(adminSettings);
+builder.Services.AddSingleton<II18nService>(_ => new I18nService(new Dictionary<string, string>
+{
+    ["admin.title"] = "Amis Admin .NET Core",
+    ["tabs.dashboard"] = "Dashboard",
+    ["tabs.users"] = "Users",
+    ["users.create"] = "Create user",
+    ["users.edit"] = "Edit user",
+    ["users.deleteConfirm"] = "Delete user ${name}?",
+    ["common.search"] = "Search",
+    ["common.apply"] = "Apply",
+    ["common.keywords"] = "Keywords",
+    ["users.searchPlaceholder"] = "Search by name, email or role",
+    ["common.edit"] = "Edit",
+    ["common.delete"] = "Delete"
+}));
 
 if (adminSettings.CorsOrigins.Length > 0)
 {
@@ -40,12 +56,14 @@ var app = builder.Build();
 if (adminSettings.CorsOrigins.Length > 0)
     app.UseCors();
 
+app.UseStaticFiles();
+
 app.MapGet("/", () => Results.Redirect("/admin"));
 
-app.MapGet("/admin", () => Results.Content(AdminHostPage.Html, "text/html; charset=utf-8"));
+app.MapGet("/admin", () => Results.Content(AdminHostPage.RenderHtml(appSettings), "text/html; charset=utf-8"));
 
 app.MapGet("/api/admin/schema", (AdminSchemaService schemaService) =>
-    Results.Json(schemaService.BuildAdminPageSchema(), AmisJsonOptions.Default));
+    Results.Text(schemaService.BuildAdminPageJson(), "application/json; charset=utf-8"));
 
 app.MapGet("/api/admin/users", (IUserStore userStore, string? keywords, int page = 1, int perPage = 10) =>
 {
@@ -87,4 +105,3 @@ app.MapDelete("/api/admin/users/{id:int}", (int id, IUserStore userStore) =>
 app.Run();
 
 public partial class Program;
-

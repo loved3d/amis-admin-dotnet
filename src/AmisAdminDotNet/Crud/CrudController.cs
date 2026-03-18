@@ -59,6 +59,24 @@ public abstract class CrudController<TEntity, TKey, TDbContext>
     }
 
     /// <summary>
+    /// Async equivalent of <see cref="GetItems"/> using EF Core async APIs.
+    /// </summary>
+    public virtual async Task<PagedResult<TEntity>> GetItemsAsync(int page = 1, int perPage = 10)
+    {
+        page = Math.Max(page, 1);
+        perPage = Math.Clamp(perPage, 1, 100);
+
+        var set = Db.Set<TEntity>().AsNoTracking();
+        var total = await set.CountAsync();
+        var items = await set
+            .Skip((page - 1) * perPage)
+            .Take(perPage)
+            .ToListAsync();
+
+        return new PagedResult<TEntity>(items, total);
+    }
+
+    /// <summary>
     /// Persists a new entity and returns it with its generated key populated.
     /// Maps to Python <c>SqlalchemyCrud.create()</c>.
     /// <c>POST /item</c>
@@ -67,6 +85,13 @@ public abstract class CrudController<TEntity, TKey, TDbContext>
     {
         Db.Set<TEntity>().Add(entity);
         Db.SaveChanges();
+        return entity;
+    }
+
+    public virtual async Task<TEntity> CreateItemAsync(TEntity entity)
+    {
+        Db.Set<TEntity>().Add(entity);
+        await Db.SaveChangesAsync();
         return entity;
     }
 
@@ -87,6 +112,17 @@ public abstract class CrudController<TEntity, TKey, TDbContext>
         return existing;
     }
 
+    public virtual async Task<TEntity?> UpdateItemAsync(TKey id, TEntity entity)
+    {
+        var existing = await Db.Set<TEntity>().FindAsync(new object?[] { id });
+        if (existing is null)
+            return null;
+
+        Db.Entry(existing).CurrentValues.SetValues(entity);
+        await Db.SaveChangesAsync();
+        return existing;
+    }
+
     /// <summary>
     /// Removes the entity identified by <paramref name="id"/>.
     /// Returns <c>true</c> when found and removed, <c>false</c> otherwise.
@@ -101,6 +137,17 @@ public abstract class CrudController<TEntity, TKey, TDbContext>
 
         Db.Set<TEntity>().Remove(existing);
         Db.SaveChanges();
+        return true;
+    }
+
+    public virtual async Task<bool> DeleteItemAsync(TKey id)
+    {
+        var existing = await Db.Set<TEntity>().FindAsync(new object?[] { id });
+        if (existing is null)
+            return false;
+
+        Db.Set<TEntity>().Remove(existing);
+        await Db.SaveChangesAsync();
         return true;
     }
 }

@@ -63,6 +63,17 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
         return new PagedResult<TEntity>(items, total);
     }
 
+    public virtual async Task<PagedResult<TEntity>> GetItemsAsync(int page = 1, int perPage = 10)
+    {
+        page = Math.Max(page, 1);
+        perPage = Math.Clamp(perPage, 1, 100);
+
+        var set = Db.Set<TEntity>().AsNoTracking();
+        var total = await set.CountAsync();
+        var items = await set.Skip((page - 1) * perPage).Take(perPage).ToListAsync();
+        return new PagedResult<TEntity>(items, total);
+    }
+
     /// <summary>
     /// Persists a new entity. Maps to Python <c>SqlalchemyCrud.create()</c>.
     /// <c>POST {RouterPrefix}</c>
@@ -74,6 +85,13 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
         return entity;
     }
 
+    public virtual async Task<TEntity> CreateItemAsync(TEntity entity)
+    {
+        Db.Set<TEntity>().Add(entity);
+        await Db.SaveChangesAsync();
+        return entity;
+    }
+
     /// <summary>
     /// Overwrites an entity by id. Maps to Python <c>SqlalchemyCrud.update()</c>.
     /// <c>PUT {RouterPrefix}/{id}</c>
@@ -81,10 +99,22 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
     public virtual TEntity? UpdateItem(TKey id, TEntity entity)
     {
         var existing = Db.Set<TEntity>().Find(id);
-        if (existing is null) return null;
+        if (existing is null)
+            return null;
 
         Db.Entry(existing).CurrentValues.SetValues(entity);
         Db.SaveChanges();
+        return existing;
+    }
+
+    public virtual async Task<TEntity?> UpdateItemAsync(TKey id, TEntity entity)
+    {
+        var existing = await Db.Set<TEntity>().FindAsync(new object?[] { id });
+        if (existing is null)
+            return null;
+
+        Db.Entry(existing).CurrentValues.SetValues(entity);
+        await Db.SaveChangesAsync();
         return existing;
     }
 
@@ -95,10 +125,22 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
     public virtual bool DeleteItem(TKey id)
     {
         var existing = Db.Set<TEntity>().Find(id);
-        if (existing is null) return false;
+        if (existing is null)
+            return false;
 
         Db.Set<TEntity>().Remove(existing);
         Db.SaveChanges();
+        return true;
+    }
+
+    public virtual async Task<bool> DeleteItemAsync(TKey id)
+    {
+        var existing = await Db.Set<TEntity>().FindAsync(new object?[] { id });
+        if (existing is null)
+            return false;
+
+        Db.Set<TEntity>().Remove(existing);
+        await Db.SaveChangesAsync();
         return true;
     }
 
@@ -216,32 +258,49 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
     {
         var prefix = RouterPrefix;
 
-        app.MapGet(prefix, (int page, int perPage) =>
+        app.MapGet(prefix, async (int page, int perPage) =>
         {
-            var result = GetItems(page, perPage);
+            var result = await GetItemsAsync(page, perPage);
             return Results.Json(AdminApiResponse.Ok(new { items = result.Items, total = result.Total }));
         });
 
-        app.MapPost(prefix, (TEntity entity) =>
+        app.MapPost(prefix, async (TEntity entity) =>
         {
-            var created = CreateItem(entity);
+            if (!TryValidateEntity(entity, out var errorMessage))
+                return Results.Json(AdminApiResponse.Fail(errorMessage!));
+
+            var created = await CreateItemAsync(entity);
             return Results.Json(AdminApiResponse.Ok(new { item = created }, $"{Label} created."));
         });
 
-        app.MapPut(prefix + "/{id}", (TKey id, TEntity entity) =>
+        app.MapPut(prefix + "/{id}", async (TKey id, TEntity entity) =>
         {
-            var updated = UpdateItem(id, entity);
+            if (!TryValidateEntity(entity, out var errorMessage))
+                return Results.Json(AdminApiResponse.Fail(errorMessage!));
+
+            var updated = await UpdateItemAsync(id, entity);
             return updated is null
                 ? Results.Json(AdminApiResponse.Fail($"{Label} not found."))
                 : Results.Json(AdminApiResponse.Ok(new { item = updated }, $"{Label} updated."));
         });
 
-        app.MapDelete(prefix + "/{id}", (TKey id) =>
+        app.MapDelete(prefix + "/{id}", async (TKey id) =>
         {
-            return DeleteItem(id)
+            return await DeleteItemAsync(id)
                 ? Results.Json(AdminApiResponse.Ok(msg: $"{Label} deleted."))
                 : Results.Json(AdminApiResponse.Fail($"{Label} not found."));
         });
     }
-}
 
+    protected virtual bool TryValidateEntity(TEntity entity, out string? errorMessage)
+    {
+        if (DataAnnotationsModelValidator.TryValidate(entity, out var errors))
+        {
+            errorMessage = null;
+            return true;
+        }
+
+        errorMessage = DataAnnotationsModelValidator.FormatErrors(errors);
+        return false;
+    }
+}

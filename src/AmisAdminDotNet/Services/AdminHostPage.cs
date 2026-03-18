@@ -2,32 +2,34 @@ namespace AmisAdminDotNet.Services;
 
 public static class AdminHostPage
 {
-    public const string Html = """
+    public static string Html => RenderHtml(new AppSettings());
+
+    public static string RenderHtml(AppSettings settings)
+    {
+        var amisCdn = string.IsNullOrWhiteSpace(settings.AmisCdn)
+            ? new AppSettings().AmisCdn
+            : settings.AmisCdn.TrimEnd('/');
+        var schemaApiPath = string.IsNullOrWhiteSpace(settings.SchemaApiPath)
+            ? "/api/admin/schema"
+            : settings.SchemaApiPath;
+
+        return $$"""
 <!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Amis Admin .NET Core</title>
-  <link rel="stylesheet" href="https://unpkg.com/amis@6.11.0/sdk/sdk.css" />
-  <link rel="stylesheet" href="https://unpkg.com/amis@6.11.0/sdk/helper.css" />
-  <link rel="stylesheet" href="https://unpkg.com/amis@6.11.0/sdk/iconfont.css" />
-  <style>
-    html, body, #root { height: 100%; margin: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f7fa; }
-    .fallback { max-width: 1100px; margin: 24px auto; background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 8px 24px rgba(31, 35, 41, 0.08); }
-    .fallback h1 { margin-top: 0; }
-    .fallback .notice { background: #fff7e6; color: #ad6800; border: 1px solid #ffd591; padding: 12px 16px; border-radius: 8px; }
-    .fallback table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-    .fallback th, .fallback td { padding: 10px 12px; border-bottom: 1px solid #e5e6eb; text-align: left; }
-    .fallback pre { background: #0b1020; color: #d7e3ff; padding: 16px; border-radius: 8px; overflow: auto; }
-  </style>
+  <link rel="stylesheet" href="{{amisCdn}}/sdk.css" />
+  <link rel="stylesheet" href="{{amisCdn}}/helper.css" />
+  <link rel="stylesheet" href="{{amisCdn}}/iconfont.css" />
+  <link rel="stylesheet" href="/admin/site.css" />
 </head>
 <body>
   <div id="root"></div>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/amis@6.11.0/sdk/sdk.js"></script>
+  <script src="{{amisCdn}}/sdk.js"></script>
   <script>
     function escapeHtml(value) {
       return String(value)
@@ -75,7 +77,7 @@ public static class AdminHostPage
         });
     }
 
-    fetch('/api/admin/schema')
+    fetch('{{schemaApiPath}}')
       .then(function (response) { return response.json(); })
       .then(function (schema) {
         if (typeof amisRequire === 'function') {
@@ -96,4 +98,5 @@ public static class AdminHostPage
 </body>
 </html>
 """;
+    }
 }
