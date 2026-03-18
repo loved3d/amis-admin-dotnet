@@ -1,0 +1,191 @@
+using System.Text.Json.Serialization;
+
+namespace AmisAdminDotNet.AmisComponents;
+
+/// <summary>
+/// Amis <c>alert</c> component — displays a coloured notification banner.
+/// Maps to Python <c>class Alert(AmisNode)</c>.
+/// </summary>
+public sealed class Alert : AmisNode
+{
+    [JsonPropertyName("type")]
+    public override string Type => "alert";
+
+    /// <summary>
+    /// Alert level/colour: <c>"info"</c>, <c>"success"</c>, <c>"warning"</c>, <c>"danger"</c>.
+    /// Maps to Python <c>level: Optional[str]</c>.
+    /// </summary>
+    [JsonPropertyName("level")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Level { get; set; }
+
+    /// <summary>Alert content. Accepts a string or a nested <see cref="AmisNode"/>.</summary>
+    [JsonPropertyName("body")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public object? Body { get; set; }
+
+    /// <summary>Whether the alert can be dismissed by the user.</summary>
+    [JsonPropertyName("showCloseButton")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? ShowCloseButton { get; set; }
+}
+
+/// <summary>
+/// Amis <c>tpl</c> component — renders a Lodash template string.
+/// Maps to Python <c>class Tpl(AmisNode)</c>.
+/// </summary>
+public sealed class Tpl : AmisNode
+{
+    [JsonPropertyName("type")]
+    public override string Type => "tpl";
+
+    /// <summary>
+    /// Lodash template or plain HTML string to render.
+    /// Maps to Python <c>tpl: Optional[str]</c>.
+    /// </summary>
+    [JsonPropertyName("tpl")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Template { get; set; }
+}
+
+/// <summary>
+/// Amis <c>tabs</c> component — a tab-strip container.
+/// Maps to Python <c>class Tabs(AmisNode)</c>.
+/// </summary>
+public sealed class Tabs : AmisNode
+{
+    [JsonPropertyName("type")]
+    public override string Type => "tabs";
+
+    /// <summary>List of <see cref="Tab"/> definitions.</summary>
+    [JsonPropertyName("tabs")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<Tab>? TabList { get; set; }
+
+    /// <summary>
+    /// Tab style: <c>"line"</c>, <c>"card"</c>, <c>"radio"</c>, <c>"vertical"</c>, etc.
+    /// Maps to Python <c>tabsMode: Optional[str]</c>.
+    /// </summary>
+    [JsonPropertyName("tabsMode")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? TabsMode { get; set; }
+}
+
+/// <summary>
+/// A single tab within a <see cref="Tabs"/> container.
+/// Maps to Python <c>class Tab(AmisNode)</c>.
+/// </summary>
+public sealed class Tab : AmisNode
+{
+    [JsonPropertyName("type")]
+    public override string Type => "tab";
+
+    /// <summary>Tab header label.</summary>
+    [JsonPropertyName("title")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Title { get; set; }
+
+    /// <summary>Tab body content.</summary>
+    [JsonPropertyName("body")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public object? Body { get; set; }
+
+    /// <summary>Whether the tab is disabled.</summary>
+    [JsonPropertyName("disabled")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Disabled { get; set; }
+}
+
+/// <summary>
+/// Amis <c>input-text</c> component — a single-line text field.
+/// Maps to Python <c>class InputText(AmisNode)</c>.
+/// </summary>
+public sealed class InputText : AmisNode
+{
+    [JsonPropertyName("type")]
+    public override string Type => "input-text";
+
+    /// <summary>Field name bound to the form data object.</summary>
+    [JsonPropertyName("name")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Name { get; set; }
+
+    /// <summary>Field label displayed to the user.</summary>
+    [JsonPropertyName("label")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Label { get; set; }
+
+    /// <summary>Placeholder text shown when the field is empty.</summary>
+    [JsonPropertyName("placeholder")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Placeholder { get; set; }
+
+    /// <summary>Whether the field is required. Maps to Python <c>required: Optional[bool]</c>.</summary>
+    [JsonPropertyName("required")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Required { get; set; }
+
+    /// <summary>Whether the field is read-only.</summary>
+    [JsonPropertyName("readOnly")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? ReadOnly { get; set; }
+}
+
+/// <summary>
+/// Amis <c>input-email</c> component — an email address input field.
+/// </summary>
+public sealed class InputEmail : AmisNode
+{
+    [JsonPropertyName("type")]
+    public override string Type => "input-email";
+
+    /// <summary>Field name bound to the form data object.</summary>
+    [JsonPropertyName("name")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Name { get; set; }
+
+    /// <summary>Field label displayed to the user.</summary>
+    [JsonPropertyName("label")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Label { get; set; }
+
+    /// <summary>Placeholder text.</summary>
+    [JsonPropertyName("placeholder")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Placeholder { get; set; }
+
+    /// <summary>Whether the field is required.</summary>
+    [JsonPropertyName("required")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Required { get; set; }
+}
+
+/// <summary>
+/// Amis <c>switch</c> component — a boolean toggle control.
+/// Maps to Python <c>class Switch(AmisNode)</c>.
+/// </summary>
+public sealed class Switch : AmisNode
+{
+    [JsonPropertyName("type")]
+    public override string Type => "switch";
+
+    /// <summary>Field name bound to the form data object.</summary>
+    [JsonPropertyName("name")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Name { get; set; }
+
+    /// <summary>Field label displayed to the user.</summary>
+    [JsonPropertyName("label")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Label { get; set; }
+
+    /// <summary>Value emitted when the switch is ON. Defaults to <c>true</c>.</summary>
+    [JsonPropertyName("trueValue")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public object? TrueValue { get; set; }
+
+    /// <summary>Value emitted when the switch is OFF. Defaults to <c>false</c>.</summary>
+    [JsonPropertyName("falseValue")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public object? FalseValue { get; set; }
+}
