@@ -101,6 +101,9 @@ public sealed class ModelFieldInfo
             || underlying == typeof(decimal))
             return ("input-number", "");
 
+        if (underlying.IsEnum)
+            return ("select", "mapping");
+
         return ("input-text", "");
     }
 }
@@ -140,20 +143,50 @@ public static class TableModelParser
     public static IReadOnlyList<TableColumn> ParseColumns(Type entityType)
     {
         return ParseFields(entityType)
-            .Select(f => new TableColumn
+            .Select(f =>
             {
-                Name  = f.ColumnName,
-                Label = f.Name,
-                Type  = string.IsNullOrEmpty(f.AmisColumnType) ? null : f.AmisColumnType,
-                Map   = f.AmisColumnType == "mapping"
-                    ? new Dictionary<string, string>
-                    {
-                        ["true"]  = "<span class='label label-success'>Yes</span>",
-                        ["false"] = "<span class='label label-danger'>No</span>"
-                    }
-                    : null
+                var col = new TableColumn
+                {
+                    Name  = f.ColumnName,
+                    Label = f.Name,
+                    Type  = string.IsNullOrEmpty(f.AmisColumnType) ? null : f.AmisColumnType,
+                    Map   = f.AmisColumnType == "mapping"
+                        ? BuildMappingDict(f.ClrType)
+                        : null
+                };
+
+                // bool columns get an inline switch quickEdit
+                var underlying = Nullable.GetUnderlyingType(f.ClrType) ?? f.ClrType;
+                if (underlying == typeof(bool))
+                    col.QuickEdit = new { type = "switch" };
+
+                return col;
             })
             .ToList();
+    }
+
+    /// <summary>Builds a mapping dictionary for <c>mapping</c>-type columns.</summary>
+    private static Dictionary<string, string> BuildMappingDict(Type clrType)
+    {
+        var underlying = Nullable.GetUnderlyingType(clrType) ?? clrType;
+
+        if (underlying.IsEnum)
+        {
+            // GroupBy to handle enum members sharing the same numeric value (e.g. aliases)
+            return Enum.GetValues(underlying)
+                .Cast<object>()
+                .GroupBy(v => Convert.ToInt32(v))
+                .ToDictionary(
+                    g => g.Key.ToString(),
+                    g => g.First().ToString() ?? string.Empty);
+        }
+
+        // bool mapping
+        return new Dictionary<string, string>
+        {
+            ["true"]  = "<span class='label label-success'>Yes</span>",
+            ["false"] = "<span class='label label-danger'>No</span>"
+        };
     }
 
     /// <summary>
@@ -165,37 +198,128 @@ public static class TableModelParser
     {
         return ParseFields(entityType)
             .Where(f => !f.IsPrimaryKey)
-            .Select<ModelFieldInfo, object>(f => f.AmisInputType switch
+            .Select<ModelFieldInfo, object>(f =>
             {
-                "switch" => new Switch
+                var underlying = Nullable.GetUnderlyingType(f.ClrType) ?? f.ClrType;
+
+                if (underlying.IsEnum)
                 {
-                    Name  = f.ColumnName,
-                    Label = f.Name
-                },
-                "input-datetime" => new InputDatetime
-                {
-                    Name     = f.ColumnName,
-                    Label    = f.Name,
-                    Required = f.IsRequired ? true : null
-                },
-                "input-date" => new InputDate
-                {
-                    Name     = f.ColumnName,
-                    Label    = f.Name,
-                    Required = f.IsRequired ? true : null
-                },
-                "input-number" => new InputNumber
-                {
-                    Name     = f.ColumnName,
-                    Label    = f.Name,
-                    Required = f.IsRequired ? true : null
-                },
-                _ => new InputText
-                {
-                    Name     = f.ColumnName,
-                    Label    = f.Name,
-                    Required = f.IsRequired ? true : null
+                    return new Select
+                    {
+                        Name     = f.ColumnName,
+                        Label    = f.Name,
+                        Required = f.IsRequired ? true : null,
+                        Options  = Enum.GetValues(underlying)
+                            .Cast<object>()
+                            .Select(v => new SelectOption
+                            {
+                                Label = v.ToString() ?? string.Empty,
+                                Value = Convert.ToInt32(v)
+                            })
+                            .ToList()
+                    };
                 }
+
+                return f.AmisInputType switch
+                {
+                    "switch" => new Switch
+                    {
+                        Name  = f.ColumnName,
+                        Label = f.Name
+                    },
+                    "input-datetime" => new InputDatetime
+                    {
+                        Name     = f.ColumnName,
+                        Label    = f.Name,
+                        Required = f.IsRequired ? true : null
+                    },
+                    "input-date" => new InputDate
+                    {
+                        Name     = f.ColumnName,
+                        Label    = f.Name,
+                        Required = f.IsRequired ? true : null
+                    },
+                    "input-number" => new InputNumber
+                    {
+                        Name     = f.ColumnName,
+                        Label    = f.Name,
+                        Required = f.IsRequired ? true : null
+                    },
+                    _ => new InputText
+                    {
+                        Name     = f.ColumnName,
+                        Label    = f.Name,
+                        Required = f.IsRequired ? true : null
+                    }
+                };
+            })
+            .ToList();
+    }
+
+    /// <summary>
+    /// Generates amis filter form field components from an entity type's properties.
+    /// DateTime fields are rendered as <see cref="InputDatetimeRange"/> for range filtering.
+    /// Maps to Python's filter form generation.
+    /// </summary>
+    public static IReadOnlyList<object> ParseFilterFields(Type entityType)
+    {
+        return ParseFields(entityType)
+            .Where(f => !f.IsPrimaryKey)
+            .Select<ModelFieldInfo, object>(f =>
+            {
+                var underlying = Nullable.GetUnderlyingType(f.ClrType) ?? f.ClrType;
+
+                if (underlying == typeof(DateTime) || underlying == typeof(DateTimeOffset))
+                {
+                    return new InputDatetimeRange
+                    {
+                        Name   = f.ColumnName,
+                        Label  = f.Name,
+                        Format = "YYYY-MM-DD HH:mm:ss"
+                    };
+                }
+
+                if (underlying.IsEnum)
+                {
+                    return new Select
+                    {
+                        Name     = f.ColumnName,
+                        Label    = f.Name,
+                        Clearable = true,
+                        Options  = Enum.GetValues(underlying)
+                            .Cast<object>()
+                            .Select(v => new SelectOption
+                            {
+                                Label = v.ToString() ?? string.Empty,
+                                Value = Convert.ToInt32(v)
+                            })
+                            .ToList()
+                    };
+                }
+
+                return f.AmisInputType switch
+                {
+                    "switch" => new Switch
+                    {
+                        Name  = f.ColumnName,
+                        Label = f.Name
+                    },
+                    "input-date" => new InputDate
+                    {
+                        Name  = f.ColumnName,
+                        Label = f.Name
+                    },
+                    "input-number" => new InputNumber
+                    {
+                        Name  = f.ColumnName,
+                        Label = f.Name
+                    },
+                    _ => new InputText
+                    {
+                        Name  = f.ColumnName,
+                        Label = f.Name
+                    }
+                };
             })
             .ToList();
     }

@@ -546,3 +546,32 @@ public sealed class Textarea : AmisNode
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? MaxRows { get; set; }
 }
+
+/// <summary>
+/// Amis <c>input-datetime-range</c> form item — a date-time range picker.
+/// Used in filter forms to select a start and end date-time.
+/// </summary>
+public sealed class InputDatetimeRange : AmisNode
+{
+    [JsonPropertyName("type")]
+    public override string Type => "input-datetime-range";
+
+    [JsonPropertyName("name")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Name { get; set; }
+
+    [JsonPropertyName("label")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Label { get; set; }
+
+    /// <summary>
+    /// Date-time format string, e.g. <c>"YYYY-MM-DD HH:mm:ss"</c>.
+    /// </summary>
+    [JsonPropertyName("format")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Format { get; set; }
+
+    [JsonPropertyName("required")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Required { get; set; }
+}
