@@ -575,3 +575,323 @@ public sealed class InputDatetimeRange : AmisNode
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? Required { get; set; }
 }
+
+/// <summary>
+/// Amis <c>input-file</c> form item — a file-upload field.
+/// Maps to Python <c>class InputFile(FormItem)</c>.
+/// </summary>
+public sealed class InputFile : AmisNode
+{
+    [JsonPropertyName("type")]
+    public override string Type => "input-file";
+
+    [JsonPropertyName("name")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Name { get; set; }
+
+    [JsonPropertyName("label")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Label { get; set; }
+
+    /// <summary>Upload receiver URL (e.g. <c>"/admin/file/upload"</c>).</summary>
+    [JsonPropertyName("receiver")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Receiver { get; set; }
+
+    /// <summary>Accepted MIME types or extensions (e.g. <c>".pdf,.docx"</c>).</summary>
+    [JsonPropertyName("accept")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Accept { get; set; }
+
+    /// <summary>Maximum upload size in bytes.</summary>
+    [JsonPropertyName("maxSize")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? MaxSize { get; set; }
+
+    [JsonPropertyName("required")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Required { get; set; }
+
+    /// <summary>Whether multiple files may be selected at once.</summary>
+    [JsonPropertyName("multiple")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Multiple { get; set; }
+}
+
+/// <summary>
+/// Amis <c>input-image</c> form item — an image-upload field with inline preview.
+/// Maps to Python <c>class InputImage(FormItem)</c>.
+/// </summary>
+public sealed class InputImage : AmisNode
+{
+    [JsonPropertyName("type")]
+    public override string Type => "input-image";
+
+    [JsonPropertyName("name")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Name { get; set; }
+
+    [JsonPropertyName("label")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Label { get; set; }
+
+    /// <summary>Upload receiver URL (e.g. <c>"/admin/file/upload"</c>).</summary>
+    [JsonPropertyName("receiver")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Receiver { get; set; }
+
+    /// <summary>Accepted image MIME types (e.g. <c>".jpg,.png,.gif"</c>).</summary>
+    [JsonPropertyName("accept")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Accept { get; set; }
+
+    /// <summary>Maximum upload size in bytes.</summary>
+    [JsonPropertyName("maxSize")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? MaxSize { get; set; }
+
+    [JsonPropertyName("required")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Required { get; set; }
+
+    /// <summary>Whether multiple images may be selected.</summary>
+    [JsonPropertyName("multiple")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Multiple { get; set; }
+
+    /// <summary>Crop settings object. Set to enable built-in image crop dialog.</summary>
+    [JsonPropertyName("crop")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public object? Crop { get; set; }
+}
+
+/// <summary>
+/// Amis <c>input-color</c> form item — a color picker.
+/// Maps to Python <c>class InputColor(FormItem)</c>.
+/// </summary>
+public sealed class InputColor : AmisNode
+{
+    [JsonPropertyName("type")]
+    public override string Type => "input-color";
+
+    [JsonPropertyName("name")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Name { get; set; }
+
+    [JsonPropertyName("label")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Label { get; set; }
+
+    /// <summary>
+    /// Color format: <c>"hex"</c> (default), <c>"rgb"</c>, <c>"rgba"</c>, <c>"hsl"</c>.
+    /// </summary>
+    [JsonPropertyName("format")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Format { get; set; }
+
+    [JsonPropertyName("required")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Required { get; set; }
+}
+
+/// <summary>
+/// Amis <c>collapse</c> component — an expandable/collapsible container.
+/// Maps to Python <c>class Collapse(AmisNode)</c>.
+/// </summary>
+public sealed class Collapse : AmisNode
+{
+    [JsonPropertyName("type")]
+    public override string Type => "collapse";
+
+    /// <summary>Header label shown on the collapse toggle.</summary>
+    [JsonPropertyName("header")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Header { get; set; }
+
+    [JsonPropertyName("body")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public object? Body { get; set; }
+
+    /// <summary>Whether the panel is collapsed by default.</summary>
+    [JsonPropertyName("collapsed")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Collapsed { get; set; }
+}
+
+/// <summary>
+/// Amis <c>collapse-group</c> component — groups multiple <see cref="Collapse"/> panels.
+/// </summary>
+public sealed class CollapseGroup : AmisNode
+{
+    [JsonPropertyName("type")]
+    public override string Type => "collapse-group";
+
+    [JsonPropertyName("body")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<Collapse>? Body { get; set; }
+
+    /// <summary>
+    /// When <c>true</c>, only one panel can be open at a time (accordion mode).
+    /// </summary>
+    [JsonPropertyName("accordion")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Accordion { get; set; }
+}
+
+/// <summary>
+/// Amis <c>divider</c> component — a horizontal visual separator.
+/// Maps to Python <c>class Divider(AmisNode)</c>.
+/// </summary>
+public sealed class Divider : AmisNode
+{
+    [JsonPropertyName("type")]
+    public override string Type => "divider";
+
+    /// <summary>
+    /// Line style: <c>"solid"</c> (default), <c>"dashed"</c>, <c>"dotted"</c>.
+    /// </summary>
+    [JsonPropertyName("lineStyle")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? LineStyle { get; set; }
+
+    /// <summary>Direction: <c>"horizontal"</c> (default) or <c>"vertical"</c>.</summary>
+    [JsonPropertyName("direction")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Direction { get; set; }
+}
+
+/// <summary>
+/// Amis <c>card</c> component — a bordered card with header and body.
+/// Maps to Python <c>class Card(AmisNode)</c>.
+/// </summary>
+public sealed class Card : AmisNode
+{
+    [JsonPropertyName("type")]
+    public override string Type => "card";
+
+    [JsonPropertyName("header")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public object? Header { get; set; }
+
+    [JsonPropertyName("body")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public object? Body { get; set; }
+
+    [JsonPropertyName("footer")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public object? Footer { get; set; }
+
+    /// <summary>
+    /// Card actions displayed in the card footer area (list of amis action schemas).
+    /// </summary>
+    [JsonPropertyName("actions")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<object>? Actions { get; set; }
+}
+
+/// <summary>
+/// Amis <c>cards</c> component — a grid of <see cref="Card"/> items backed by a data source.
+/// Maps to Python <c>class Cards(AmisNode)</c>.
+/// </summary>
+public sealed class Cards : AmisNode
+{
+    [JsonPropertyName("type")]
+    public override string Type => "cards";
+
+    /// <summary>Data source API URL.</summary>
+    [JsonPropertyName("source")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Source { get; set; }
+
+    /// <summary>Card template used to render each item.</summary>
+    [JsonPropertyName("card")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Card? CardTemplate { get; set; }
+
+    /// <summary>Number of cards per row.</summary>
+    [JsonPropertyName("perRow")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? PerRow { get; set; }
+
+    [JsonPropertyName("placeholder")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Placeholder { get; set; }
+}
+
+/// <summary>
+/// Amis <c>steps</c> component — a step-by-step wizard indicator.
+/// Maps to Python <c>class Steps(AmisNode)</c>.
+/// </summary>
+public sealed class Steps : AmisNode
+{
+    [JsonPropertyName("type")]
+    public override string Type => "steps";
+
+    [JsonPropertyName("steps")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<Step>? StepList { get; set; }
+
+    /// <summary>Current active step index (0-based).</summary>
+    [JsonPropertyName("value")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Value { get; set; }
+
+    /// <summary>Display mode: <c>"horizontal"</c> (default) or <c>"vertical"</c>.</summary>
+    [JsonPropertyName("mode")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Mode { get; set; }
+}
+
+/// <summary>A single step within a <see cref="Steps"/> component.</summary>
+public sealed class Step
+{
+    [JsonPropertyName("title")]
+    public string Title { get; set; } = string.Empty;
+
+    [JsonPropertyName("subTitle")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? SubTitle { get; set; }
+
+    [JsonPropertyName("description")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Description { get; set; }
+
+    /// <summary>Step icon (amis icon class).</summary>
+    [JsonPropertyName("icon")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Icon { get; set; }
+}
+
+/// <summary>
+/// Amis <c>image</c> display component — renders an image from a URL.
+/// Maps to Python <c>class Image(AmisNode)</c>.
+/// Use <see cref="InputImage"/> for an image-upload <em>form field</em>.
+/// </summary>
+public sealed class Image : AmisNode
+{
+    [JsonPropertyName("type")]
+    public override string Type => "image";
+
+    /// <summary>Image URL.</summary>
+    [JsonPropertyName("src")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Src { get; set; }
+
+    [JsonPropertyName("alt")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Alt { get; set; }
+
+    [JsonPropertyName("title")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Title { get; set; }
+
+    /// <summary>Width in CSS units (e.g. <c>"100px"</c> or <c>"50%"</c>).</summary>
+    [JsonPropertyName("width")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Width { get; set; }
+
+    /// <summary>Height in CSS units.</summary>
+    [JsonPropertyName("height")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Height { get; set; }
+}

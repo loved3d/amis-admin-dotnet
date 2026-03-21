@@ -445,6 +445,14 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
     protected virtual IEnumerable<AdminAction> GetAdminActions() => [];
 
     /// <summary>
+    /// Returns row-level <see cref="ModelAction"/> instances that appear as buttons in
+    /// the CRUD table's operation column, alongside the built-in Edit and Delete buttons.
+    /// Subclasses override to add custom per-row actions.
+    /// Maps to Python <c>ModelAction</c> system.
+    /// </summary>
+    protected virtual IEnumerable<ModelAction> GetRowActions() => [];
+
+    /// <summary>
     /// Builds the bulk-delete button shown in the CRUD bulk-actions toolbar.
     /// Maps to Python bulk delete action.
     /// </summary>
@@ -605,10 +613,16 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
     public override Page BuildPageSchema()
     {
         var columns = GetColumns().Cast<object>().ToList();
+
+        // Operation column: built-in Update/Delete buttons + custom row actions
+        var opButtons = new List<object> { GetUpdateAction(), GetDeleteAction() };
+        foreach (var rowAction in GetRowActions())
+            opButtons.Add(rowAction.BuildRowActionButton(RouterPrefix));
+
         columns.Add(new OperationColumn
         {
             Label   = "Actions",
-            Buttons = [GetUpdateAction(), GetDeleteAction()]
+            Buttons = opButtons
         });
 
         var footerToolbar = new List<object> { "statistics", "switch-per-page", "pagination" };
@@ -637,6 +651,31 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
             }
         };
     }
+
+    // ── Lifecycle hooks ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Called after a new entity is successfully persisted.
+    /// Override to run side-effects such as sending notifications or audit logging.
+    /// Maps to Python <c>post_create</c> / <c>after_create</c> hooks.
+    /// </summary>
+    protected virtual Task OnAfterCreateAsync(TEntity entity, HttpContext ctx)
+        => Task.CompletedTask;
+
+    /// <summary>
+    /// Called after an existing entity is successfully updated.
+    /// Maps to Python <c>post_update</c> / <c>after_update</c> hooks.
+    /// </summary>
+    protected virtual Task OnAfterUpdateAsync(TEntity entity, HttpContext ctx)
+        => Task.CompletedTask;
+
+    /// <summary>
+    /// Called after an entity is successfully deleted.
+    /// <paramref name="id"/> is the primary key of the deleted entity.
+    /// Maps to Python <c>post_delete</c> / <c>after_delete</c> hooks.
+    /// </summary>
+    protected virtual Task OnAfterDeleteAsync(TKey id, HttpContext ctx)
+        => Task.CompletedTask;
 
     // ── Route registration ────────────────────────────────────────────────────
 
@@ -669,6 +708,7 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
                 return Results.Json(AdminApiResponse.Fail(errorMessage!));
 
             var created = await CreateItemAsync(entity);
+            await OnAfterCreateAsync(created, ctx);
             return Results.Json(AdminApiResponse.Ok(new { item = created }, $"{Label} created."));
         });
 
@@ -681,9 +721,11 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
                 return Results.Json(AdminApiResponse.Fail(errorMessage!));
 
             var updated = await UpdateItemAsync(id, entity);
-            return updated is null
-                ? Results.Json(AdminApiResponse.Fail($"{Label} not found."))
-                : Results.Json(AdminApiResponse.Ok(new { item = updated }, $"{Label} updated."));
+            if (updated is null)
+                return Results.Json(AdminApiResponse.Fail($"{Label} not found."));
+
+            await OnAfterUpdateAsync(updated, ctx);
+            return Results.Json(AdminApiResponse.Ok(new { item = updated }, $"{Label} updated."));
         });
 
         app.MapDelete(prefix + "/{id}", async (TKey id, HttpContext ctx) =>
@@ -691,7 +733,11 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
             if (!await HasDeletePermissionAsync(ctx))
                 return Results.Json(AdminApiResponse.Fail("Unauthorized"), statusCode: 401);
 
-            return await DeleteItemAsync(id)
+            var deleted = await DeleteItemAsync(id);
+            if (deleted)
+                await OnAfterDeleteAsync(id, ctx);
+
+            return deleted
                 ? Results.Json(AdminApiResponse.Ok(msg: $"{Label} deleted."))
                 : Results.Json(AdminApiResponse.Fail($"{Label} not found."));
         });
@@ -734,6 +780,18 @@ public abstract class ModelAdmin<TEntity, TKey, TDbContext> : RouterAdmin
                 if (!await HasPagePermissionAsync(ctx))
                     return Results.Json(AdminApiResponse.Fail("Unauthorized"), statusCode: 401);
                 return Results.Json(await capturedAction.HandleAsync(ctx));
+            });
+        }
+
+        // Row-level action routes: POST {prefix}/row-actions/{actionName}/{id}
+        foreach (var rowAction in GetRowActions())
+        {
+            var capturedRowAction = rowAction;
+            app.MapPost(prefix + "/row-actions/" + capturedRowAction.ActionName + "/{id}", async (HttpContext ctx) =>
+            {
+                if (!await HasPagePermissionAsync(ctx))
+                    return Results.Json(AdminApiResponse.Fail("Unauthorized"), statusCode: 401);
+                return Results.Json(await capturedRowAction.HandleAsync(ctx));
             });
         }
     }
