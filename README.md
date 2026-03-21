@@ -8,7 +8,7 @@ The project mirrors the three core modules of the original:
 |---|---|
 | `fastapi_amis_admin/amis/` | `AmisComponents/` — typed C# classes that serialize to amis JSON schema |
 | `fastapi_amis_admin/crud/` | `Crud/` — generic EF Core CRUD base (`CrudController<T,TKey,TDbContext>`) |
-| `fastapi_amis_admin/admin/` | `Admin/` — `BaseAdmin`, `RouterAdmin`, `ModelAdmin<T,TKey,TDbContext>`, `AdminApp`, `AdminSite` |
+| `fastapi_amis_admin/admin/` | `Admin/` — full admin type hierarchy including `ModelAdmin`, `PageAdmin`, `FormAdmin`, `IframeAdmin`, `LinkAdmin`, `TemplateAdmin`, `AdminApp`, `AdminSite`, and extension mixins |
 
 Key design principle: **no changes to the official amis JavaScript SDK**. The backend generates amis JSON schema; the frontend host page (`AdminHostPage`) loads the amis SDK and renders whatever the schema endpoint returns.
 
@@ -30,10 +30,17 @@ After startup visit:
 
 Typed C# classes (inheriting `AmisNode`) that correspond 1-to-1 with Python's `AmisNode` Pydantic models in `fastapi_amis_admin/amis/components.py`:
 
-- `Page`, `Tabs`, `Tab`
-- `Crud`, `Form`, `Table`, `TableColumn`, `OperationColumn`
-- `Button` (Action), `Dialog`
-- `Alert`, `Tpl`, `InputText`, `InputEmail`, `InputNumber`, `InputDatetime`, `Switch`
+**Layout / containers**
+- `Page`, `Tabs`, `Tab`, `Grid`, `Panel`, `Collapse`, `CollapseGroup`, `Divider`
+
+**Data display**
+- `Crud`, `Table`, `TableColumn`, `OperationColumn`, `Cards`, `Card`, `Image`, `Tpl`, `Alert`, `Steps`
+
+**Forms**
+- `Form`, `InputText`, `InputEmail`, `InputNumber`, `InputDatetime`, `InputDate`, `InputDateTime`, `InputDatetimeRange`, `InputColor`, `InputFile`, `InputImage`, `Switch`, `Select`, `Textarea`
+
+**Actions / chrome**
+- `Button` (Action), `Dialog`, `Drawer`, `Service`
 
 `AmisNode.ToJson()` serializes the concrete runtime type using `System.Text.Json`, equivalent to Python's `amis_json()` / `model.dict()`.
 
@@ -44,10 +51,91 @@ Typed C# classes (inheriting `AmisNode`) that correspond 1-to-1 with Python's `A
 
 ### Admin layer (`Admin/`)
 
-- `BaseAdmin` / `RouterAdmin` — base classes (mirrors Python's `BaseAdmin` / `RouterAdmin`)
-- `ModelAdmin<TEntity, TKey, TDbContext>` — combines EF Core CRUD with amis schema generation; override `RouterPath` and `Label` to create a fully functional admin panel for any EF Core entity
-- `AdminApp` — groups admins, resolves them from DI, mounts their routes
-- `AdminSite` — top-level site; call `CreateApp()` → `RegisterAdmin<T>()` → `MountApp()` to wire everything
+#### Core abstractions
+
+| C# class | Python equivalent | Description |
+|---|---|---|
+| `BaseAdmin` | `BaseAdmin` | Base for all admin types; provides `HasPagePermission` hook |
+| `RouterAdmin` | `RouterAdmin` | Adds route registration and `PageSchema` metadata |
+| `PageAdmin` | `PageAdmin` | Serves an arbitrary amis `Page` schema — override `GetPage()` |
+| `IframeAdmin` | `IframeAdmin` | Embeds a URL in an `iframe` component; override `Src` |
+| `LinkAdmin` | `LinkAdmin` | Navigation-only; adds a hyperlink entry to the menu |
+| `TemplateAdmin` | `TemplateAdmin` | Renders a page body from a Lodash template string; override `Template` |
+| `FormAdmin<TSchema>` | `FormAdmin` | Serves a standalone form page and handles its POST submission |
+| `ModelAdmin<T,K,Db>` | `ModelAdmin` | Full EF Core CRUD + amis schema generation for an entity |
+| `AdminApp` | `AdminApp` | Groups admins; call `RegisterAdmin<T>()` (DI) or `AddAdmin(instance)` |
+| `AdminSite` | `AdminSite` | Top-level site; `CreateApp()` → `MountApp()` wires everything |
+| `AdminGroup` | `AdminGroup` | Nested group of admins rendered as a sub-Tabs within an `AdminApp` |
+
+#### Built-in site admins
+
+| C# class | Python equivalent | Description |
+|---|---|---|
+| `HomeAdmin` | `HomeAdmin` | Dashboard page with site-info and runtime-info property cards |
+| `FileAdmin` | `FileAdmin` | File-upload endpoint (`POST .../upload`); configurable directory, max size, and allowed extensions |
+| `DocsAdmin` | `DocsAdmin` | Embeds Swagger UI (`/swagger`) in an iframe |
+| `ReDocsAdmin` | `ReDocsAdmin` | Embeds ReDoc (`/redoc`) in an iframe |
+| `APIDocsApp` | `APIDocsApp` | `AdminApp` that pre-registers `DocsAdmin` and `ReDocsAdmin` |
+
+Auto-register all built-in admins with one call:
+
+```csharp
+var site = new AdminSite(adminSettings, app.Services);
+site.RegisterBuiltinAdmins();            // adds Home, FileAdmin, DocsAdmin, ReDocsAdmin
+site.MountApp(app, serveHostPage: true); // also serves GET /admin HTML host page
+```
+
+#### Admin actions
+
+| C# class | Description |
+|---|---|
+| `AdminAction` | Header-toolbar action button; handled via `POST .../actions/{name}` |
+| `FormAction<TSchema>` | Dialog-based toolbar action with an inline form |
+| `ModelAction` | Row-level operation column button; handled via `POST .../row-actions/{name}/{id}` |
+
+Override `GetAdminActions()` in a `ModelAdmin` subclass to add toolbar actions;
+override `GetRowActions()` to add row-level actions.
+
+#### Lifecycle hooks
+
+Override these `protected virtual` methods in a `ModelAdmin` subclass to react to
+CRUD events (e.g. audit logging, notifications, cache invalidation):
+
+```csharp
+protected virtual Task OnAfterCreateAsync(TEntity entity, HttpContext ctx);
+protected virtual Task OnAfterUpdateAsync(TEntity entity, HttpContext ctx);
+protected virtual Task OnAfterDeleteAsync(TKey id, HttpContext ctx);
+```
+
+#### Extension mixins (`Admin/Extensions/`)
+
+| C# class | Python equivalent | Description |
+|---|---|---|
+| `ReadOnlyModelAdmin` | `ReadOnlyModelAdmin` | Disables create/update/delete; shows a read-only View dialog |
+| `AutoTimeModelAdmin` | `AutoTimeModelAdmin` | Excludes auto-managed time fields from create/update forms |
+| `SoftDeleteModelAdmin` | `SoftDeleteModelAdmin` | Sets `DeleteTime` instead of physically removing rows |
+| `FootableModelAdmin` | `FootableModelAdmin` | Adds footable (responsive collapse) CSS class to the CRUD table |
+| `AuthenticatedModelAdmin` | — | Requires `IsAuthenticated` before granting access |
+| `RoleBasedModelAdmin` | — | Requires a specific ASP.NET Core role |
+| `PolicyBasedModelAdmin` | — | Requires an ASP.NET Core authorization policy |
+
+### `AdminSite` built-in admin + host page pattern
+
+```csharp
+// 1. Build the site
+var site = new AdminSite(adminSettings, app.Services);
+
+// 2. Auto-register Home / File / Docs built-ins
+site.RegisterBuiltinAdmins(includeApiDocs: adminSettings.EnableSwagger);
+
+// 3. Add your own app(s)
+var myApp = site.CreateApp("My App");
+myApp.RegisterAdmin<ProductAdmin>();  // resolved from DI
+myApp.AddAdmin(new SpecialAdmin());   // pre-instantiated (no DI required)
+
+// 4. Mount everything — schema + host HTML page + CRUD routes
+site.MountApp(app, serveHostPage: true);
+```
 
 ### Demo end-to-end (`Demo/`)
 
@@ -78,20 +166,58 @@ Routes registered by the demo:
 - `DataAnnotationsModelValidator` — Pydantic-like model validation backed by `System.ComponentModel.DataAnnotations`
 - `InMemoryUserStore` — in-memory user store used by the user management demo
 
+## Python → C# mapping summary
+
+| Python concept | C# equivalent | Status |
+|---|---|---|
+| `PageSchemaAdmin` | `PageSchemaOptions` record on `RouterAdmin` | ✅ |
+| `PageAdmin` | `PageAdmin` | ✅ |
+| `IframeAdmin` | `IframeAdmin` | ✅ |
+| `LinkAdmin` | `LinkAdmin` | ✅ |
+| `TemplateAdmin` | `TemplateAdmin` | ✅ |
+| `FormAdmin` | `FormAdmin<TSchema>` | ✅ |
+| `ModelAdmin` | `ModelAdmin<T,K,Db>` | ✅ |
+| `BaseActionAdmin` | `AdminAction` / `ModelAction` | ✅ |
+| `FormAction` | `FormAction<TSchema>` | ✅ |
+| `ModelAction` | `ModelAction` | ✅ |
+| `AdminApp` | `AdminApp` | ✅ |
+| `AdminGroup` | `AdminGroup` | ✅ |
+| `AdminSite` | `AdminSite` | ✅ |
+| `HomeAdmin` | `HomeAdmin` | ✅ |
+| `FileAdmin` | `FileAdmin` | ✅ |
+| `DocsAdmin` | `DocsAdmin` | ✅ |
+| `ReDocsAdmin` | `ReDocsAdmin` | ✅ |
+| `APIDocsApp` | `APIDocsApp` | ✅ |
+| `ReadOnlyModelAdmin` | `ReadOnlyModelAdmin` | ✅ |
+| `AutoTimeModelAdmin` | `AutoTimeModelAdmin` | ✅ |
+| `SoftDeleteModelAdmin` | `SoftDeleteModelAdmin` | ✅ |
+| `FootableModelAdmin` | `FootableModelAdmin` | ✅ |
+| Lifecycle hooks | `OnAfterCreateAsync` / `OnAfterUpdateAsync` / `OnAfterDeleteAsync` | ✅ |
+| `fastapi-user-auth` | Not yet implemented | ⬜ |
+| `fastapi-scheduler` | Not yet implemented | ⬜ |
+
 ## Tests
 
 ```bash
 dotnet test AmisAdminDotNet.slnx
 ```
 
-76 xUnit tests covering:
+233 xUnit tests covering:
 
-- Amis component serialization (all component types)
+- Amis component serialization (all component types including new InputFile, InputImage, InputColor, Collapse, Card, Steps, Image, Divider)
 - CRUD controller operations (paged list, create, update, delete — sync and async)
 - `TableModelParser` type mapping and reflection
-- `ModelAdmin` schema generation (create/update/delete actions, `BuildPageSchema`)
+- `ModelAdmin` schema generation (create/update/delete/row actions, `BuildPageSchema`, lifecycle hooks)
+- `AdminApp.AddAdmin()` direct instance registration
 - `AdminApp` and `AdminSite` tab assembly
+- `AdminSite.RegisterBuiltinAdmins()` idempotency and built-in admin registration
+- `AdminSite.BuildPageSchema()` using `SiteTitle` from settings
+- Built-in admins: `DocsAdmin`, `ReDocsAdmin`, `APIDocsApp`
+- `TemplateAdmin` page generation and `InitApi`
+- `ModelAction` row-level actions (schema and route integration)
+- Extension mixins: `ReadOnlyModelAdmin`, `AutoTimeModelAdmin`, `SoftDeleteModelAdmin`, `FootableModelAdmin`, `AuthenticatedModelAdmin`, `RoleBasedModelAdmin`, `PolicyBasedModelAdmin`
 - `AdminSchemaService` schema building and caching
 - `AdminHostPage` HTML rendering
 - `InMemoryUserStore` CRUD flow
 - Utility helpers (`I18nService`, `DataAnnotationsModelValidator`, `AppSettings`)
+

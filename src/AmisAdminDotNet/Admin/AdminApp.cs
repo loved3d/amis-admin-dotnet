@@ -69,6 +69,18 @@ public class AdminApp
     }
 
     /// <summary>
+    /// Adds a pre-instantiated <see cref="RouterAdmin"/> to this app.
+    /// Use when the admin does not require DI resolution (e.g. built-in admins).
+    /// The admin's <see cref="BaseAdmin.App"/> is set to this app automatically.
+    /// </summary>
+    /// <param name="admin">The admin instance to add.</param>
+    public void AddAdmin(RouterAdmin admin)
+    {
+        admin.App = this;
+        _admins.Add(admin);
+    }
+
+    /// <summary>
     /// Creates a named <see cref="AdminGroup"/> within this app.
     /// Maps to Python's nested <c>AdminGroup</c> registration.
     /// </summary>
